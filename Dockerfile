@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ---- Build stage: install locked dependencies into a virtualenv with uv ----
-FROM python:3.13-slim AS builder
+FROM python:3.14-slim AS builder
 
 COPY --from=ghcr.io/astral-sh/uv:0.12 /uv /uvx /bin/
 
@@ -18,7 +18,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --no-install-project
 
 # ---- Runtime stage: slim image, non-root user, no build tools ----
-FROM python:3.13-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONDONTWRITEBYTECODE=1 \
