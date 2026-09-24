@@ -15,7 +15,9 @@ dependencies = [
 dev = [
     "httpx2>=2.13.1",
     "mypy>=2.3.1",
+    "pre-commit>=4.6.2",
     "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
     "ruff>=0.16.8",
 ]
 
@@ -26,7 +28,15 @@ package = false
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-ra"
+addopts = "-ra --cov=app --cov-report=term-missing"
+
+[tool.coverage.run]
+branch = true
+source = ["app"]
+
+[tool.coverage.report]
+fail_under = 85
+skip_empty = true
 
 [tool.ruff]
 line-length = 100
