@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+
+      - name: Install dependencies (locked)
+        run: uv sync --locked
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      # Same checks as the local pre-commit hook: gitleaks, ruff, ruff format, mypy, file checks
+      - name: Pre-commit checks
+        run: uv run pre-commit run --all-files --show-diff-on-failure
+
+      # The real-database test runs only if the CI_DATABASE_URL secret (Neon `ci` branch) is set
+      - name: Tests
+        env:
+          DATABASE_URL: ${{ secrets.CI_DATABASE_URL }}
+        run: uv run pytest
+
+      - name: Docker build
+        run: docker build -t backstageil-api:ci .
