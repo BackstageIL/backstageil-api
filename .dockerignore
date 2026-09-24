@@ -1,0 +1,26 @@
+# Secrets and private data never enter the image
+.env
+.env.*
+credentials/
+secrets/
+private/
+*.pem
+*.key
+*.xlsx
+*.xls
+*.csv
+
+# Not needed at runtime
+.git/
+.github/
+.venv/
+tests/
+**/__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.idea/
+.vscode/
+*.md
+docker-compose.yml
+Dockerfile
