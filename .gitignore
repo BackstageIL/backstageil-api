@@ -1,0 +1,38 @@
+# --- Confidential: never commit (secrets and private data stay on the local machine) ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+credentials/
+secrets/
+private/
+*service-account*.json
+*credentials*.json
+# Source data files (may contain personal contact details)
+*.xlsx
+*.xls
+*.csv
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+
+# --- Tooling caches ---
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# --- IDE / OS ---
+.idea/
+.vscode/
+.DS_Store
