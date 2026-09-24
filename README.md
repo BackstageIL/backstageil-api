@@ -14,6 +14,7 @@ Backend for BackstageIL: technical information about performance venues and hall
 ```bash
 uv sync                 # creates .venv with Python 3.13 and all dependencies
 cp .env.example .env    # then fill in DATABASE_URL (your Neon dev branch)
+uv run pre-commit install   # gitleaks, ruff, mypy and file checks on every commit
 ```
 
 ## Run
@@ -38,9 +39,8 @@ curl localhost:8080/health
 ## Test and lint
 
 ```bash
-uv run pytest           # the real-database test runs only when DATABASE_URL is set
-uv run ruff check . && uv run ruff format --check .
-uv run mypy app tests
+uv run pytest           # with coverage (min 85%); the real-DB test runs only when DATABASE_URL is set
+uv run pre-commit run --all-files   # gitleaks, ruff, ruff format, mypy (strict), file checks
 ```
 
 ## Layout
