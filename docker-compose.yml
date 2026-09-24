@@ -1,0 +1,13 @@
+# Local run of the production image. Configuration comes from your local, git-ignored .env
+# (DATABASE_URL points to your Neon dev branch).
+services:
+  api:
+    build: .
+    image: backstageil-api:local
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      PORT: "8080"
+    ports:
+      - "8080:8080"

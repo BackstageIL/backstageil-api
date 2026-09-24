@@ -26,6 +26,15 @@ uv run uvicorn app.main:app --reload
 - Liveness: `GET /health`
 - Readiness (checks the database): `GET /health/ready`
 
+## Docker
+
+The same image runs locally and on Cloud Run (listens on `$PORT`, default 8080, as a non-root user).
+
+```bash
+docker compose up --build     # uses your local .env if present
+curl localhost:8080/health
+```
+
 ## Test and lint
 
 ```bash
