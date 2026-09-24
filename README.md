@@ -9,11 +9,44 @@ Backend for BackstageIL: technical information about performance venues and hall
 - PostgreSQL on Neon
 - Docker, deployed to Google Cloud Run (blue-green)
 
-## Status
+## Setup
 
-Work in progress. Setup and run instructions will be added with the application scaffold.
+```bash
+uv sync                 # creates .venv with Python 3.13 and all dependencies
+cp .env.example .env    # then fill in DATABASE_URL (your Neon dev branch)
+```
+
+## Run
+
+```bash
+uv run uvicorn app.main:app --reload
+```
+
+- API docs: http://127.0.0.1:8000/docs
+- Liveness: `GET /health`
+- Readiness (checks the database): `GET /health/ready`
+
+## Test and lint
+
+```bash
+uv run pytest           # the real-database test runs only when DATABASE_URL is set
+uv run ruff check . && uv run ruff format --check .
+uv run mypy app tests
+```
+
+## Layout
+
+```
+app/
+  core/       config, logging, exceptions
+  db/         engine/session, ORM base, dependencies
+  routes/     HTTP endpoints (health, /api/v1/...)
+  schemas/    Pydantic request/response models
+  services/   business logic
+tests/
+```
 
 ## Configuration
 
-All configuration comes from environment variables. Secrets are never committed:
+All configuration comes from environment variables (see `.env.example`). Secrets are never committed:
 use a local `.env` file (git-ignored) for development and the hosting platform's secret store in production.
