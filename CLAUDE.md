@@ -10,6 +10,7 @@ uv sync                              # install (locked)
 uv run uvicorn app.main:app --reload # run locally -> http://127.0.0.1:8000/docs
 uv run pytest                        # tests + coverage (min 85%)
 uv run pre-commit run --all-files    # gitleaks, ruff, ruff format, mypy --strict, file checks
+                                     # (git add new files first: hooks only see tracked files)
 docker compose up --build            # run the production image locally
 uv run alembic upgrade head          # apply migrations to DATABASE_URL (Neon dev locally)
 uv run alembic revision --autogenerate -m "..."  # new migration after model changes
