@@ -29,7 +29,7 @@ repos:
     hooks:
       - id: mypy
         name: mypy (strict)
-        entry: uv run mypy app tests
+        entry: uv run mypy app scripts tests
         language: system
         types: [python]
         pass_filenames: false

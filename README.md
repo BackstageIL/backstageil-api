@@ -31,6 +31,17 @@ uv run alembic check                                    # fails if models and mi
 
 Migrations must stay backward-compatible for blue-green deploys (expand, migrate, then contract).
 
+## Seed data
+
+Cities come from the official CBS localities file (open data on data.gov.il, dataset
+`localities-in-israel`): cities, local councils, kibbutzim and moshavim, upserted by official code.
+
+```bash
+uv run python -m scripts.seed_cities --dry-run        # summary only
+uv run python -m scripts.seed_cities                  # write to DATABASE_URL (idempotent)
+uv run python -m scripts.seed_cities --code 74        # also add one specific locality
+```
+
 ## Run
 
 ```bash
