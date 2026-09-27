@@ -10,6 +10,7 @@ uv sync                              # install (locked)
 uv run uvicorn app.main:app --reload # run locally -> http://127.0.0.1:8000/docs
 uv run pytest                        # tests + coverage (min 85%)
 uv run pre-commit run --all-files    # gitleaks, ruff, ruff format, mypy --strict, file checks
+                                     # (git add new files first: hooks only see tracked files)
 docker compose up --build            # run the production image locally
 uv run alembic upgrade head          # apply migrations to DATABASE_URL (Neon dev locally)
 uv run alembic revision --autogenerate -m "..."  # new migration after model changes
@@ -23,7 +24,12 @@ uv run alembic revision --autogenerate -m "..."  # new migration after model cha
 - `app/schemas/` Pydantic request/response models
 - `app/services/` business logic; raises `DomainException` subclasses, never `HTTPException`
 - Errors always use the body `{"error_code", "error_type", "message", "details"}`
-- Data model: **Venue → Halls** (venue = place, hall = stage with specs); data stored in English
+- Data model: **cities → venues → halls** (+ `hall_pictures`, venue `recommendations`), models in
+  `app/db/models/`; data stored in English. Venue identity = city + name + street (names repeat).
+- Hall specs: typed columns for universal/filterable facts; everything else in `halls.extras`
+  (`{key: {value, note}}`). New extra = one entry in `app/schemas/hall_extras.py` (no migration).
+- Relationships are `lazy="raise"`: load related rows explicitly (`selectinload`) in services.
+- Never store people's names/phones or passwords from source data.
 - Schema changes only via Alembic migrations (`migrations/versions/`), backward-compatible for blue-green
 - Every behavior change comes with tests; mypy strict must stay clean
 
