@@ -15,7 +15,21 @@ Backend for BackstageIL: technical information about performance venues and hall
 uv sync                 # creates .venv with Python 3.13 and all dependencies
 cp .env.example .env    # then fill in DATABASE_URL (your Neon dev branch)
 uv run pre-commit install   # gitleaks, ruff, mypy and file checks on every commit
+uv run alembic upgrade head # create/update the schema on the database in DATABASE_URL
 ```
+
+## Database migrations
+
+The schema is managed only through Alembic migrations in `migrations/versions/`
+(the URL comes from `DATABASE_URL`, never from `alembic.ini`).
+
+```bash
+uv run alembic revision --autogenerate -m "add venues"   # after changing models in app/db/models/
+uv run alembic upgrade head                             # apply
+uv run alembic check                                    # fails if models and migrations differ
+```
+
+Migrations must stay backward-compatible for blue-green deploys (expand, migrate, then contract).
 
 ## Run
 
