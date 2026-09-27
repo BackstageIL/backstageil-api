@@ -62,7 +62,7 @@ uv run pre-commit run --all-files   # gitleaks, ruff, ruff format, mypy (strict)
 ```
 app/
   core/       config, logging, exceptions
-  db/         engine/session, ORM base, dependencies
+  db/         engine/session, ORM base, dependencies, models/ (cities, venues, halls, ...)
   routes/     HTTP endpoints (health, /api/v1/...)
   schemas/    Pydantic request/response models
   services/   business logic
