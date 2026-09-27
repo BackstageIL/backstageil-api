@@ -36,6 +36,15 @@ jobs:
       - name: Pre-commit checks
         run: uv run pre-commit run --all-files --show-diff-on-failure
 
+      # Migrate the Neon `ci` branch and fail if models and migrations have drifted apart
+      - name: Database migrations
+        env:
+          DATABASE_URL: ${{ secrets.CI_DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then echo "CI_DATABASE_URL not set; skipping"; exit 0; fi
+          uv run alembic upgrade head
+          uv run alembic check
+
       # The real-database test runs only if the CI_DATABASE_URL secret (Neon `ci` branch) is set
       - name: Tests
         env:
