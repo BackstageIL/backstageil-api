@@ -23,6 +23,7 @@ class ErrorCode(StrEnum):
     DATABASE_UNAVAILABLE = "DATABASE_UNAVAILABLE"
     DATABASE_ERROR = "DATABASE_ERROR"
     DUPLICATE_ENTRY = "DUPLICATE_ENTRY"
+    UNKNOWN_CITY = "UNKNOWN_CITY"
     INTERNAL_ERROR = "INTERNAL_ERROR"
 
 
@@ -86,6 +87,18 @@ class DatabaseUnavailableError(DomainException):
 
     def __init__(self) -> None:
         super().__init__("Database is unavailable")
+
+
+class UnknownCityError(DomainException):
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+    error_code = ErrorCode.UNKNOWN_CITY
+    error_type = ErrorType.VALIDATION
+
+    def __init__(self, city_code: int) -> None:
+        super().__init__(
+            f"No city with official code {city_code} (seed it with scripts.seed_cities --code)",
+            details={"city_code": city_code},
+        )
 
 
 async def _domain_exception_handler(_request: Request, exc: Exception) -> JSONResponse:

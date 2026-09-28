@@ -42,6 +42,16 @@ uv run python -m scripts.seed_cities                  # write to DATABASE_URL (i
 uv run python -m scripts.seed_cities --code 74        # also add one specific locality
 ```
 
+Verified venue data (a local JSON file of `{venue, hall}` items, never committed) is loaded with:
+
+```bash
+uv run python -m scripts.load_venues PATH --dry-run   # validate only
+uv run python -m scripts.load_venues PATH             # upsert by slug, one transaction (unpublished)
+uv run python -m scripts.load_venues PATH --publish   # upsert and publish
+```
+
+Text that looks like a phone number or email is rejected: personal contact details are never stored.
+
 ## Run
 
 ```bash
