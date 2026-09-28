@@ -47,4 +47,4 @@ class City(Base):
     latitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6))
     longitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6))
 
-    venues: Mapped[list["Venue"]] = relationship(back_populates="city", lazy="raise")
+    venues: Mapped[list[Venue]] = relationship(back_populates="city", lazy="raise")

@@ -60,10 +60,10 @@ class Venue(TimestampMixin, Base):
     venue_type: Mapped[VenueType] = mapped_column(str_enum(VenueType, "venue_type"))
     is_published: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
 
-    city: Mapped["City"] = relationship(back_populates="venues", lazy="raise")
-    halls: Mapped[list["Hall"]] = relationship(
+    city: Mapped[City] = relationship(back_populates="venues", lazy="raise")
+    halls: Mapped[list[Hall]] = relationship(
         back_populates="venue", lazy="raise", cascade="all, delete-orphan", passive_deletes=True
     )
-    recommendations: Mapped[list["Recommendation"]] = relationship(
+    recommendations: Mapped[list[Recommendation]] = relationship(
         back_populates="venue", lazy="raise", cascade="all, delete-orphan", passive_deletes=True
     )
