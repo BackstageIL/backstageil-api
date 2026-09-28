@@ -67,4 +67,4 @@ class Recommendation(TimestampMixin, Base):
     display_order: Mapped[int] = mapped_column(SmallInteger, default=0, server_default="0")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
 
-    venue: Mapped["Venue"] = relationship(back_populates="recommendations", lazy="raise")
+    venue: Mapped[Venue] = relationship(back_populates="recommendations", lazy="raise")

@@ -1,7 +1,7 @@
 # backstageil-api
 
 FastAPI backend for BackstageIL: technical information about performance venues and halls in Israel.
-Python 3.13, uv, SQLAlchemy 2 async + asyncpg, PostgreSQL on Neon, Docker on Google Cloud Run.
+Python 3.14, uv, SQLAlchemy 2 async + asyncpg, PostgreSQL on Neon, Docker on Google Cloud Run.
 
 ## Commands
 

@@ -23,4 +23,4 @@ class HallPicture(Base):
     display_order: Mapped[int] = mapped_column(SmallInteger, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    hall: Mapped["Hall"] = relationship(back_populates="pictures", lazy="raise")
+    hall: Mapped[Hall] = relationship(back_populates="pictures", lazy="raise")

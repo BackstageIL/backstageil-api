@@ -5,14 +5,14 @@ Backend for BackstageIL: technical information about performance venues and hall
 
 ## Stack
 
-- Python 3.13, FastAPI, SQLAlchemy 2 (async) + asyncpg, managed with [uv](https://docs.astral.sh/uv/)
+- Python 3.14, FastAPI, SQLAlchemy 2 (async) + asyncpg, managed with [uv](https://docs.astral.sh/uv/)
 - PostgreSQL on Neon
 - Docker, deployed to Google Cloud Run (blue-green)
 
 ## Setup
 
 ```bash
-uv sync                 # creates .venv with Python 3.13 and all dependencies
+uv sync                 # creates .venv with Python 3.14 and all dependencies
 cp .env.example .env    # then fill in DATABASE_URL (your Neon dev branch)
 uv run pre-commit install   # gitleaks, ruff, mypy and file checks on every commit
 uv run alembic upgrade head # create/update the schema on the database in DATABASE_URL

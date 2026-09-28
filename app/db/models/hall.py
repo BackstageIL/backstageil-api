@@ -123,8 +123,8 @@ class Hall(TimestampMixin, Base):
     last_verified_at: Mapped[date | None] = mapped_column(Date)
     is_published: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
 
-    venue: Mapped["Venue"] = relationship(back_populates="halls", lazy="raise")
-    pictures: Mapped[list["HallPicture"]] = relationship(
+    venue: Mapped[Venue] = relationship(back_populates="halls", lazy="raise")
+    pictures: Mapped[list[HallPicture]] = relationship(
         back_populates="hall",
         lazy="raise",
         cascade="all, delete-orphan",
