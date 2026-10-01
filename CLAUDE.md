@@ -34,6 +34,8 @@ uv run alembic revision --autogenerate -m "..."  # new migration after model cha
   halls have is a column. Content is neutral facts, no opinions or tour remarks.
 - Relationships are `lazy="raise"`: load related rows explicitly (`selectinload`) in services.
 - Never store people's names/phones or passwords from source data.
+- Admin-only routes go under `app/routes/admin.py` (router-level `require_admin`); never put the
+  admin key itself anywhere, only its hash in ADMIN_API_KEY_HASH.
 - Schema changes only via Alembic migrations (`migrations/versions/`), backward-compatible for blue-green
 - Every behavior change comes with tests; mypy strict must stay clean
 

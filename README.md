@@ -73,6 +73,19 @@ uv run uvicorn app.main:app --reload
 
 Successful responses are cacheable (`Cache-Control: public, max-age=60, s-maxage=3600, stale-while-revalidate=86400`).
 
+## Admin access
+
+Write endpoints require the single admin API key in the `X-API-Key` header. Only its SHA-256 hash
+is configured (`ADMIN_API_KEY_HASH`); without it, admin endpoints answer 503. Repeated wrong keys
+from one address get 429 for a while.
+
+```bash
+uv run python -m scripts.new_admin_key   # prints a new key (save it) and its hash (configure it)
+curl -H "X-API-Key: $KEY" localhost:8000/api/v1/admin/ping   # {"status":"ok"} when the key works
+```
+
+Rotate: generate a new key, replace `ADMIN_API_KEY_HASH` (local `.env` / hosting secret), redeploy.
+
 ## Docker
 
 The same image runs locally and on Cloud Run (listens on `$PORT`, default 8080, as a non-root user).

@@ -21,10 +21,17 @@ class Settings(BaseSettings):
     # Browser origins allowed to call the API, e.g. CORS_ORIGINS='["https://backstageil.com"]'
     cors_origins: list[str] = []
 
-    @field_validator("database_url", mode="before")
+    # SHA-256 (hex) of the admin API key; the key itself is never stored. Unset = admin disabled.
+    # Generate with: uv run python -m scripts.new_admin_key
+    admin_api_key_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    # Wrong admin keys allowed per client address within the window before answering 429
+    admin_max_failed_attempts: int = Field(default=10, ge=1)
+    admin_failed_window_seconds: int = Field(default=300, ge=1)
+
+    @field_validator("database_url", "admin_api_key_hash", mode="before")
     @classmethod
-    def empty_database_url_is_unset(cls, value: object) -> object:
-        # `DATABASE_URL=` (as in .env.example) means "no database", not an empty URL.
+    def empty_value_is_unset(cls, value: object) -> object:
+        # `DATABASE_URL=` (as in .env.example) means "not set", not an empty value.
         return None if value == "" else value
 
 
