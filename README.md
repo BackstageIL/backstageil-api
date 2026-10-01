@@ -62,6 +62,17 @@ uv run uvicorn app.main:app --reload
 - Liveness: `GET /health`
 - Readiness (checks the database): `GET /health/ready`
 
+## Public API (read-only, published data only)
+
+| Endpoint | Returns |
+|---|---|
+| `GET /api/v1/venues?q=&city=&district=&type=&limit=20&offset=0` | Paged venue list (name search, filters), sorted by name |
+| `GET /api/v1/venues/{venue_slug}` | Venue with its halls |
+| `GET /api/v1/venues/{venue_slug}/halls/{hall_slug}` | Hall technical document (fields, `field_notes`, `extras`) |
+| `GET /api/v1/cities` | Cities that have venues, with counts |
+
+Successful responses are cacheable (`Cache-Control: public, max-age=60, s-maxage=3600, stale-while-revalidate=86400`).
+
 ## Docker
 
 The same image runs locally and on Cloud Run (listens on `$PORT`, default 8080, as a non-root user).

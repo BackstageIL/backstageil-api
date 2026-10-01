@@ -24,6 +24,8 @@ class ErrorCode(StrEnum):
     DATABASE_ERROR = "DATABASE_ERROR"
     DUPLICATE_ENTRY = "DUPLICATE_ENTRY"
     UNKNOWN_CITY = "UNKNOWN_CITY"
+    VENUE_NOT_FOUND = "VENUE_NOT_FOUND"
+    HALL_NOT_FOUND = "HALL_NOT_FOUND"
     INTERNAL_ERROR = "INTERNAL_ERROR"
 
 
@@ -98,6 +100,27 @@ class UnknownCityError(DomainException):
         super().__init__(
             f"No city with official code {city_code} (seed it with scripts.seed_cities --code)",
             details={"city_code": city_code},
+        )
+
+
+class VenueNotFoundError(DomainException):
+    status_code = status.HTTP_404_NOT_FOUND
+    error_code = ErrorCode.VENUE_NOT_FOUND
+    error_type = ErrorType.NOT_FOUND
+
+    def __init__(self, venue_slug: str) -> None:
+        super().__init__(f"Venue '{venue_slug}' not found", details={"venue": venue_slug})
+
+
+class HallNotFoundError(DomainException):
+    status_code = status.HTTP_404_NOT_FOUND
+    error_code = ErrorCode.HALL_NOT_FOUND
+    error_type = ErrorType.NOT_FOUND
+
+    def __init__(self, venue_slug: str, hall_slug: str) -> None:
+        super().__init__(
+            f"Hall '{hall_slug}' not found in venue '{venue_slug}'",
+            details={"venue": venue_slug, "hall": hall_slug},
         )
 
 
