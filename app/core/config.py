@@ -21,9 +21,11 @@ class Settings(BaseSettings):
     # Browser origins allowed to call the API, e.g. CORS_ORIGINS='["https://backstageil.com"]'
     cors_origins: list[str] = []
 
-    # SHA-256 (hex) of the admin API key; the key itself is never stored. Unset = admin disabled.
-    # Generate with: uv run python -m scripts.new_admin_key
-    admin_api_key_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    # Salted scrypt hash of the admin API key ("scrypt$n$r$p$salt$hash"); the key itself is never
+    # stored. Unset = admin disabled. Generate with: uv run python -m scripts.new_admin_key
+    admin_api_key_hash: str | None = Field(
+        default=None, pattern=r"^scrypt\$\d+\$\d+\$\d+\$[A-Za-z0-9_-]+\$[A-Za-z0-9_-]+$"
+    )
     # Wrong admin keys allowed per client address within the window before answering 429
     admin_max_failed_attempts: int = Field(default=10, ge=1)
     admin_failed_window_seconds: int = Field(default=300, ge=1)

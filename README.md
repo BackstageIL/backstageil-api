@@ -75,8 +75,8 @@ Successful responses are cacheable (`Cache-Control: public, max-age=60, s-maxage
 
 ## Admin access
 
-Write endpoints require the single admin API key in the `X-API-Key` header. Only its SHA-256 hash
-is configured (`ADMIN_API_KEY_HASH`); without it, admin endpoints answer 503. Repeated wrong keys
+Write endpoints require the single admin API key in the `X-API-Key` header. Only its salted scrypt
+hash is configured (`ADMIN_API_KEY_HASH`); without it, admin endpoints answer 503. Repeated wrong keys
 from one address get 429 for a while.
 
 ```bash

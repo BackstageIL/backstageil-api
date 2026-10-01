@@ -1,13 +1,16 @@
 """
 Admin authentication: a single admin API key sent as `X-API-Key`.
 
-Only the SHA-256 hash of the key is configured (ADMIN_API_KEY_HASH). The key is a long random
-token (see scripts/new_admin_key.py), so a fast hash is enough; comparison is constant-time.
+Only a salted scrypt hash of the key is configured (ADMIN_API_KEY_HASH), in the format
+`scrypt$<n>$<r>$<p>$<salt>$<hash>` (base64url). scrypt is deliberately slow, so the hash stays
+safe even if a weak key were ever set by hand; comparison is constant-time.
 Repeated wrong keys from one client address are answered with 429 for a while.
 """
 
+import base64
 import hashlib
 import hmac
+import secrets
 import time
 from collections import defaultdict, deque
 from typing import Annotated
@@ -20,13 +23,38 @@ from app.core.logger import get_logger
 
 logger = get_logger(__name__)
 
+# scrypt cost: ~16 MB memory, a few tens of ms per check (admin requests are rare)
+_SCRYPT_N, _SCRYPT_R, _SCRYPT_P, _SCRYPT_LEN = 2**14, 8, 1, 32
+
+
+def _b64(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).decode().rstrip("=")
+
+
+def _unb64(text: str) -> bytes:
+    return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
+
+
+def _scrypt(key: str, salt: bytes, n: int, r: int, p: int) -> bytes:
+    return hashlib.scrypt(key.encode(), salt=salt, n=n, r=r, p=p, dklen=_SCRYPT_LEN)
+
 
 def hash_api_key(key: str) -> str:
-    return hashlib.sha256(key.encode()).hexdigest()
+    """Salted scrypt hash of the key, with its parameters, as one string."""
+    salt = secrets.token_bytes(16)
+    digest = _scrypt(key, salt, _SCRYPT_N, _SCRYPT_R, _SCRYPT_P)
+    return f"scrypt${_SCRYPT_N}${_SCRYPT_R}${_SCRYPT_P}${_b64(salt)}${_b64(digest)}"
 
 
-def api_key_matches(key: str, expected_hash: str) -> bool:
-    return hmac.compare_digest(hash_api_key(key), expected_hash)
+def api_key_matches(key: str, stored_hash: str) -> bool:
+    try:
+        scheme, n, r, p, salt, digest = stored_hash.split("$")
+        if scheme != "scrypt":
+            return False
+        computed = _scrypt(key, _unb64(salt), int(n), int(r), int(p))
+        return hmac.compare_digest(computed, _unb64(digest))
+    except ValueError:
+        return False
 
 
 class FailedAttemptLimiter:

@@ -26,9 +26,24 @@ def make_client(key_hash: str | None = hash_api_key(KEY), max_failures: int = 3)
 def test_hash_and_match() -> None:
     key_hash = hash_api_key(KEY)
 
-    assert len(key_hash) == 64
+    assert key_hash.startswith("scrypt$16384$8$1$")
+    assert KEY not in key_hash
     assert api_key_matches(KEY, key_hash)
     assert not api_key_matches(KEY + "x", key_hash)
+
+
+def test_hashes_are_salted() -> None:
+    first, second = hash_api_key(KEY), hash_api_key(KEY)
+
+    assert first != second
+    assert api_key_matches(KEY, first) and api_key_matches(KEY, second)
+
+
+@pytest.mark.parametrize(
+    "stored", ["", "garbage", "sha256$abc", "scrypt$x$8$1$c2FsdA$aGFzaA", "a" * 64]
+)
+def test_malformed_stored_hash_never_matches(stored: str) -> None:
+    assert not api_key_matches(KEY, stored)
 
 
 def test_new_admin_key_is_long_random_and_matches_its_hash() -> None:
@@ -95,7 +110,7 @@ def test_limiter_window_expires(monkeypatch: pytest.MonkeyPatch) -> None:
     assert limiter.retry_after("1.2.3.4") == 0
 
 
-@pytest.mark.parametrize("bad_hash", ["not-a-hash", "A" * 64, "a" * 63])
+@pytest.mark.parametrize("bad_hash", ["not-a-hash", "a" * 64, "scrypt$16384$8$1$salt"])
 def test_invalid_hash_setting_is_rejected(bad_hash: str) -> None:
     with pytest.raises(ValidationError):
         Settings(_env_file=None, admin_api_key_hash=bad_hash)
