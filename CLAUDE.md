@@ -26,8 +26,10 @@ uv run alembic revision --autogenerate -m "..."  # new migration after model cha
 - Errors always use the body `{"error_code", "error_type", "message", "details"}`
 - Data model: **cities → venues → halls** (+ `hall_pictures`, venue `recommendations`), models in
   `app/db/models/`; data stored in English. Venue identity = city + name + street (names repeat).
-- Hall specs: typed columns for universal/filterable facts; everything else in `halls.extras`
-  (`{key: {value, note}}`). New extra = one entry in `app/schemas/hall_extras.py` (no migration).
+- Halls read like a venue technical document: sections of typed columns (access, stage, rigging,
+  masking, power, sound, lighting, backstage, rules, seating), a short factual note per column in
+  `field_notes`, and `extras` ONLY for items particular to one hall (key + label). Anything most
+  halls have is a column. Content is neutral facts, no opinions or tour remarks.
 - Relationships are `lazy="raise"`: load related rows explicitly (`selectinload`) in services.
 - Never store people's names/phones or passwords from source data.
 - Schema changes only via Alembic migrations (`migrations/versions/`), backward-compatible for blue-green
