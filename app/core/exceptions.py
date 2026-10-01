@@ -26,10 +26,14 @@ class ErrorCode(StrEnum):
     UNKNOWN_CITY = "UNKNOWN_CITY"
     VENUE_NOT_FOUND = "VENUE_NOT_FOUND"
     HALL_NOT_FOUND = "HALL_NOT_FOUND"
+    UNAUTHORIZED = "UNAUTHORIZED"
+    TOO_MANY_ATTEMPTS = "TOO_MANY_ATTEMPTS"
+    ADMIN_NOT_CONFIGURED = "ADMIN_NOT_CONFIGURED"
     INTERNAL_ERROR = "INTERNAL_ERROR"
 
 
 class ErrorType(StrEnum):
+    AUTH = "AUTH"
     NOT_FOUND = "NOT_FOUND"
     VALIDATION = "VALIDATION"
     CONFLICT = "CONFLICT"
@@ -161,3 +165,38 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(IntegrityError, _integrity_error_handler)
     app.add_exception_handler(DBAPIError, _database_error_handler)
     app.add_exception_handler(Exception, _unhandled_exception_handler)
+
+
+class UnauthorizedError(DomainException):
+    status_code = status.HTTP_401_UNAUTHORIZED
+    error_code = ErrorCode.UNAUTHORIZED
+    error_type = ErrorType.AUTH
+
+    def __init__(self) -> None:
+        super().__init__("Missing or invalid X-API-Key")
+
+
+class TooManyAttemptsError(DomainException):
+    status_code = status.HTTP_429_TOO_MANY_REQUESTS
+    error_code = ErrorCode.TOO_MANY_ATTEMPTS
+    error_type = ErrorType.AUTH
+
+    def __init__(self, retry_after_seconds: int) -> None:
+        super().__init__(
+            "Too many failed attempts; try again later",
+            details={"retry_after_seconds": retry_after_seconds},
+        )
+
+    def to_response(self) -> JSONResponse:
+        response = super().to_response()
+        response.headers["Retry-After"] = str(self.details["retry_after_seconds"])
+        return response
+
+
+class AdminNotConfiguredError(DomainException):
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    error_code = ErrorCode.ADMIN_NOT_CONFIGURED
+    error_type = ErrorType.UNAVAILABLE
+
+    def __init__(self) -> None:
+        super().__init__("Admin access is not configured (ADMIN_API_KEY_HASH is not set)")

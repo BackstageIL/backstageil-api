@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import Settings, get_settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logger import configure_logging, get_logger
+from app.core.security import FailedAttemptLimiter
 from app.db.session import Database
 from app.routes import api_router
 from app.routes.health import router as health_router
@@ -45,6 +46,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = settings
     app.state.database = None
+    app.state.admin_limiter = FailedAttemptLimiter(
+        settings.admin_max_failed_attempts, settings.admin_failed_window_seconds
+    )
 
     app.add_middleware(
         CORSMiddleware,
