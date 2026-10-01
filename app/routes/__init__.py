@@ -2,5 +2,9 @@
 
 from fastapi import APIRouter
 
-# Domain routers (venues, halls, ...) are added here as they are built.
+from app.routes.cities import router as cities_router
+from app.routes.venues import router as venues_router
+
 api_router = APIRouter(prefix="/api/v1")
+api_router.include_router(venues_router)
+api_router.include_router(cities_router)
