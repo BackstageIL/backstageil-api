@@ -77,7 +77,8 @@ jobs:
       - name: Promote (switch production traffic)
         env:
           DEPLOY_URL: ${{ steps.deploy.outputs.url }}
-        run: npx --yes "$VERCEL_CLI" promote "$DEPLOY_URL" --yes --token="$VERCEL_TOKEN"
+        # REST API instead of `vercel promote` (its user lookup answers 404 for the deploy token)
+        run: uv run python -m scripts.promote "$DEPLOY_URL"
 
       - name: Smoke test production
         env:
