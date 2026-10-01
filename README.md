@@ -7,7 +7,7 @@ Backend for BackstageIL: technical information about performance venues and hall
 
 - Python 3.14, FastAPI, SQLAlchemy 2 (async) + asyncpg, managed with [uv](https://docs.astral.sh/uv/)
 - PostgreSQL on Neon
-- Docker, deployed to Google Cloud Run (blue-green)
+- Vercel (Python functions, blue-green releases); Docker for local runs and portability
 
 ## Setup
 
@@ -101,9 +101,14 @@ curl -X POST -H "X-API-Key: $ADMIN_KEY" -H 'Content-Type: application/json' \
      --data @venues.json 'localhost:8000/api/v1/admin/venues/import?publish=true&dry_run=true'
 ```
 
+## Deployment
+
+Production runs on Vercel (region `fra1`) with controlled blue-green releases from GitHub
+Actions; previews per pull request. See [docs/deploy.md](docs/deploy.md).
+
 ## Docker
 
-The same image runs locally and on Cloud Run (listens on `$PORT`, default 8080, as a non-root user).
+The image listens on `$PORT` (default 8080) as a non-root user; it's the portable fallback to Vercel.
 
 ```bash
 docker compose up --build     # uses your local .env if present

@@ -45,10 +45,21 @@ def build_engine_args(url: str) -> tuple[str, dict[str, Any]]:
 
 
 class Database:
-    """Owns the engine and session factory for the application's lifetime."""
+    """Owns the engine and session factory for the application's lifetime.
 
-    def __init__(self, url: str, *, pool_size: int = 5, max_overflow: int = 5) -> None:
+    pooled=True is for a connection pooler in front of Postgres (Neon's `-pooler` endpoint, used
+    on serverless hosts): asyncpg's prepared-statement caches are turned off so the app never
+    depends on the pooler routing a statement back to the same server connection. Verified to work
+    both ways against Neon (2026-10); off is a cheap safety net.
+    """
+
+    def __init__(
+        self, url: str, *, pool_size: int = 5, max_overflow: int = 5, pooled: bool = False
+    ) -> None:
         clean_url, connect_args = build_engine_args(url)
+        if pooled:
+            connect_args |= {"statement_cache_size": 0, "prepared_statement_cache_size": 0}
+        self.connect_args = connect_args
         self.engine: AsyncEngine = create_async_engine(
             clean_url,
             connect_args=connect_args,

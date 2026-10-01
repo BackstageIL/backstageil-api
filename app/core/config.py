@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     database_url: SecretStr | None = None
     db_pool_size: int = Field(default=5, ge=1, le=20)
     db_max_overflow: int = Field(default=5, ge=0, le=20)
+    # True when DATABASE_URL is a connection-pooler endpoint (Neon "-pooler", serverless hosts):
+    # small per-instance pool and no client-side prepared-statement caches.
+    db_pooled: bool = False
 
     # Browser origins allowed to call the API, e.g. CORS_ORIGINS='["https://backstageil.com"]'
     cors_origins: list[str] = []

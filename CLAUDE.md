@@ -1,7 +1,7 @@
 # backstageil-api
 
 FastAPI backend for BackstageIL: technical information about performance venues and halls in Israel.
-Python 3.14, uv, SQLAlchemy 2 async + asyncpg, PostgreSQL on Neon, Docker on Google Cloud Run.
+Python 3.14, uv, SQLAlchemy 2 async + asyncpg, PostgreSQL on Neon, deployed on Vercel (Docker kept for local runs/portability).
 
 ## Commands
 
@@ -52,4 +52,10 @@ uv run alembic revision --autogenerate -m "..."  # new migration after model cha
 
 `.env`, credentials, API keys, tokens and private data (e.g. source spreadsheets with contact details)
 stay on the local machine. Only `.env.example` with variable names is committed. Deployment secrets live
-in GitHub Actions secrets / Cloud Run / Cloudflare. gitleaks and GitHub push protection enforce this.
+in GitHub Actions secrets / Vercel / Cloudflare. gitleaks and GitHub push protection enforce this.
+
+## Deployment
+
+Vercel, region fra1; release = CI green on main → `.github/workflows/deploy.yml` (migrate PROD →
+deploy without traffic → smoke test → promote). Runbook: `docs/deploy.md`. Production uses
+`DB_POOLED=true` with Neon's pooled endpoint. Before AdSense goes live, revisit Vercel Hobby (non-commercial).
