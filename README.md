@@ -86,6 +86,21 @@ curl -H "X-API-Key: $KEY" localhost:8000/api/v1/admin/ping   # {"status":"ok"} w
 
 Rotate: generate a new key, replace `ADMIN_API_KEY_HASH` (local `.env` / hosting secret), redeploy.
 
+Admin endpoints (all need `X-API-Key`, responses are `no-store`):
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/v1/admin/venues/import?publish=true\|false&dry_run=` | Bulk upload (loader JSON format, max 200 items, all-or-nothing; `publish` required) |
+| `GET /api/v1/admin/venues[?published=]`, `/venues/{venue}`, `/venues/{venue}/halls/{hall}` | Read, including unpublished |
+| `PATCH /api/v1/admin/venues/{venue}`, `/venues/{venue}/halls/{hall}` | Edit only the fields sent (`null` clears; `field_notes`/`extras` replace the map) |
+| `POST .../publish`, `.../unpublish` (venue or hall) | Show / hide on the public API |
+| `DELETE /api/v1/admin/venues/{venue}?confirm={venue}`, `.../halls/{hall}?confirm={hall}` | Permanent delete (venue cascades) |
+
+```bash
+curl -X POST -H "X-API-Key: $ADMIN_KEY" -H 'Content-Type: application/json' \
+     --data @venues.json 'localhost:8000/api/v1/admin/venues/import?publish=true&dry_run=true'
+```
+
 ## Docker
 
 The same image runs locally and on Cloud Run (listens on `$PORT`, default 8080, as a non-root user).

@@ -65,14 +65,23 @@ class HallImport(HallTechnicalFields):
 
     @model_validator(mode="after")
     def texts_have_no_contact_details(self) -> Self:
-        texts = [getattr(self, name) for name in TEXT_FIELDS]
-        texts += list(self.field_notes.root.values())
-        for extra in self.extras.root.values():
-            texts += [extra.label, extra.note, extra.value]
-        for text in texts:
-            if isinstance(text, str):
-                check_no_contact_details(text)
+        check_hall_texts(self, self.field_notes, self.extras)
         return self
+
+
+def check_hall_texts(
+    hall: HallTechnicalFields, field_notes: HallFieldNotes | None, extras: HallExtras | None
+) -> None:
+    """Reject contact details in every free-text field, field note and extra of a hall."""
+    texts: list[object] = [getattr(hall, name) for name in TEXT_FIELDS]
+    if field_notes is not None:
+        texts += list(field_notes.root.values())
+    if extras is not None:
+        for extra in extras.root.values():
+            texts += [extra.label, extra.note, extra.value]
+    for text in texts:
+        if isinstance(text, str):
+            check_no_contact_details(text)
 
 
 class VenueImportItem(BaseModel):

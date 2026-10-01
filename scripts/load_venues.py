@@ -20,8 +20,9 @@ from pydantic import TypeAdapter, ValidationError
 from app.core.config import get_settings
 from app.core.exceptions import DomainException
 from app.db.session import Database
+from app.schemas.admin import ImportReport
 from app.schemas.venue_import import VenueImportItem
-from app.services.venue_import import ImportResult, import_venue
+from app.services.venue_import import duplicate_slugs, import_items
 
 _ITEMS = TypeAdapter(list[VenueImportItem])
 
@@ -36,21 +37,20 @@ def load_items(path: Path) -> list[VenueImportItem]:
         )
         count = exc.error_count()
         raise SystemExit(f"{path.name}: {count} validation error(s)\n{problems}") from exc
-    slugs = [item.venue.slug for item in items]
-    duplicates = sorted({s for s in slugs if slugs.count(s) > 1})
+    duplicates = duplicate_slugs(items)
     if duplicates:
         raise SystemExit(f"Duplicate venue slugs in {path.name}: {duplicates}")
     return items
 
 
-async def _load(items: list[VenueImportItem], publish: bool) -> list[ImportResult]:
+async def _load(items: list[VenueImportItem], publish: bool) -> ImportReport:
     database_url = get_settings().database_url
     if database_url is None:
         raise SystemExit("DATABASE_URL is not set")
     database = Database(database_url.get_secret_value())
     try:
         async with database.sessionmaker() as session, session.begin():
-            return [await import_venue(session, item, publish=publish) for item in items]
+            return await import_items(session, items, publish=publish)
     except DomainException as exc:
         raise SystemExit(f"Nothing written: {exc.message}") from exc
     finally:
@@ -68,12 +68,10 @@ def main(argv: list[str] | None = None) -> None:
     print(f"{len(items)} items valid")
     if args.dry_run:
         return
-    results = asyncio.run(_load(items, args.publish))
-    created = sum(r.venue_created for r in results)
-    halls_created = sum(r.hall_created for r in results)
+    report = asyncio.run(_load(items, args.publish))
     print(
-        f"Venues: {created} created, {len(results) - created} updated | "
-        f"Halls: {halls_created} created, {len(results) - halls_created} updated"
+        f"Venues: {report.venues_created} created, {report.venues_updated} updated | "
+        f"Halls: {report.halls_created} created, {report.halls_updated} updated"
     )
 
 

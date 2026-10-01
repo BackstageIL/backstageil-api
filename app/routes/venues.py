@@ -7,7 +7,7 @@ from app.core.cache import public_cache
 from app.db.dependencies import get_session
 from app.db.models import District, VenueType
 from app.schemas.venue_import import SLUG_PATTERN
-from app.schemas.venues import HallDocument, VenueDetail, VenuePage
+from app.schemas.venues import HallDocument, VenueDetail, VenuePage, VenueSummary
 from app.services import venues as service
 
 router = APIRouter(prefix="/venues", tags=["Venues"], dependencies=[Depends(public_cache)])
@@ -34,7 +34,10 @@ async def list_venues(
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> VenuePage:
     filters = service.VenueFilters(q=q, city=city, district=district, venue_type=venue_type)
-    return await service.list_venues(session, filters, limit=limit, offset=offset)
+    items, total = await service.list_venues(
+        session, filters, limit=limit, offset=offset, model=VenueSummary
+    )
+    return VenuePage(items=items, total=total, limit=limit, offset=offset)
 
 
 @router.get("/{venue_slug}", summary="Venue details with its halls")

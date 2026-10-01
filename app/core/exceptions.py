@@ -29,6 +29,8 @@ class ErrorCode(StrEnum):
     UNAUTHORIZED = "UNAUTHORIZED"
     TOO_MANY_ATTEMPTS = "TOO_MANY_ATTEMPTS"
     ADMIN_NOT_CONFIGURED = "ADMIN_NOT_CONFIGURED"
+    DUPLICATE_SLUGS = "DUPLICATE_SLUGS"
+    CONFIRMATION_MISMATCH = "CONFIRMATION_MISMATCH"
     INTERNAL_ERROR = "INTERNAL_ERROR"
 
 
@@ -200,3 +202,25 @@ class AdminNotConfiguredError(DomainException):
 
     def __init__(self) -> None:
         super().__init__("Admin access is not configured (ADMIN_API_KEY_HASH is not set)")
+
+
+class DuplicateSlugsError(DomainException):
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+    error_code = ErrorCode.DUPLICATE_SLUGS
+    error_type = ErrorType.VALIDATION
+
+    def __init__(self, slugs: list[str]) -> None:
+        super().__init__(
+            "The upload contains the same venue slug more than once", details={"slugs": slugs}
+        )
+
+
+class ConfirmationMismatchError(DomainException):
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+    error_code = ErrorCode.CONFIRMATION_MISMATCH
+    error_type = ErrorType.VALIDATION
+
+    def __init__(self, expected: str) -> None:
+        super().__init__(
+            f"To delete, repeat the slug: ?confirm={expected}", details={"expected": expected}
+        )
