@@ -56,7 +56,7 @@ def test_unhandled_error_is_reported_without_credentials(
     settings = Settings(_env_file=None, environment="production", sentry_dsn=DSN)
     assert init_error_tracking(settings, transport=transport) is True
 
-    app = create_app(Settings(_env_file=None))
+    app = create_app(Settings(_env_file=None, database_url=None))
 
     @app.get("/boom")
     async def boom() -> None:
@@ -80,7 +80,7 @@ def test_unhandled_error_is_reported_without_credentials(
 def test_client_errors_are_not_reported(transport: KeepEvents) -> None:
     init_error_tracking(Settings(_env_file=None, sentry_dsn=DSN), transport=transport)
 
-    with TestClient(create_app(Settings(_env_file=None))) as client:
+    with TestClient(create_app(Settings(_env_file=None, database_url=None))) as client:
         assert client.get("/api/v1/does-not-exist").status_code == 404
         assert client.post("/health").status_code == 405
     sentry_sdk.flush()
@@ -91,7 +91,7 @@ def test_client_errors_are_not_reported(transport: KeepEvents) -> None:
 def test_server_side_unavailability_is_reported(transport: KeepEvents) -> None:
     init_error_tracking(Settings(_env_file=None, sentry_dsn=DSN), transport=transport)
 
-    with TestClient(create_app(Settings(_env_file=None))) as client:
+    with TestClient(create_app(Settings(_env_file=None, database_url=None))) as client:
         assert client.get("/health/ready").status_code == 503  # no database configured
     sentry_sdk.flush()
 
