@@ -45,7 +45,7 @@ Merging to `main` runs CI. When CI succeeds, `.github/workflows/deploy.yml`:
 1. runs `alembic upgrade head` on **PROD** (migrations must be backward-compatible: expand → migrate → contract);
 2. deploys the new version with `vercel deploy --prod --skip-domain` → **live, but no traffic**;
 3. smoke-tests the new deployment URL (`scripts/smoke_test.py`: health, readiness, venues, cities);
-4. `vercel promote` → **traffic switches** to the new version;
+4. `scripts/promote.py` (Vercel REST API, waits until done) → **traffic switches** to the new version;
 5. smoke-tests the production URL.
 
 The workflow is skipped until the `VERCEL_PROJECT_ID` variable exists, so `main` stays green before
@@ -59,8 +59,9 @@ Drill (proves nothing is promoted when a check fails): Actions → Deploy → Ru
 
 ## Rollback
 
-- Vercel dashboard → Deployments → previous production deployment → **Promote** (instant), or
-- `npx vercel rollback --token=…` (back to the previous production deployment).
+- Vercel dashboard → Deployments → previous production deployment → **⋯ → Promote** (instant), or
+- `uv run python -m scripts.promote <previous deployment URL>` with `VERCEL_TOKEN`, `VERCEL_ORG_ID`
+  and `VERCEL_PROJECT_ID` set (promote is the same traffic switch in either direction).
 
 A rollback doesn't undo migrations; that's why migrations are backward-compatible.
 
