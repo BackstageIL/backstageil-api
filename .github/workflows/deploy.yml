@@ -1,0 +1,85 @@
+name: Deploy
+
+# Controlled blue-green release to Vercel production (see docs/deploy.md):
+#   migrate PROD -> deploy WITHOUT traffic -> smoke test -> promote (traffic switch) -> smoke test.
+# If any step fails, the current production deployment keeps serving.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      simulate_smoke_failure:
+        description: "Drill: make the pre-promote smoke test fail (nothing gets promoted)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Only after CI passed on a push to main (or a manual run), and only once Vercel is configured
+    if: >-
+      vars.VERCEL_PROJECT_ID != '' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VERCEL_CLI: vercel@62.1.0
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+    steps:
+      # The exact commit CI tested
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+
+      - name: Install dependencies (locked)
+        run: uv sync --locked
+
+      # Migrations are backward-compatible (expand -> migrate -> contract), so the version that
+      # is still live keeps working on the new schema.
+      - name: Database migrations (production)
+        env:
+          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
+        run: uv run alembic upgrade head
+
+      - name: Deploy new version without traffic
+        id: deploy
+        run: |
+          url=$(npx --yes "$VERCEL_CLI" deploy --prod --skip-domain --yes --token="$VERCEL_TOKEN")
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "New deployment (not serving traffic yet): $url"
+
+      - name: Smoke test new deployment
+        env:
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+          FAIL_ON_PURPOSE: ${{ inputs.simulate_smoke_failure && '--fail-on-purpose' || '' }}
+        run: uv run python -m scripts.smoke_test "$DEPLOY_URL" $FAIL_ON_PURPOSE
+
+      - name: Promote (switch production traffic)
+        env:
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+        run: npx --yes "$VERCEL_CLI" promote "$DEPLOY_URL" --yes --token="$VERCEL_TOKEN"
+
+      - name: Smoke test production
+        env:
+          PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
+        run: uv run python -m scripts.smoke_test "$PRODUCTION_URL"

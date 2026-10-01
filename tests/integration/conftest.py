@@ -22,10 +22,15 @@ def anyio_backend() -> str:
 @pytest.fixture(scope="session")
 async def database() -> AsyncIterator[Database]:
     """One engine for the whole run (Neon is remote: opening a connection per test is slow)."""
-    database_url = Settings().database_url
-    if database_url is None:
+    settings = Settings()
+    if settings.database_url is None:
         pytest.skip("DATABASE_URL not set")
-    db = Database(database_url.get_secret_value(), pool_size=1, max_overflow=0)
+    db = Database(
+        settings.database_url.get_secret_value(),
+        pool_size=1,
+        max_overflow=0,
+        pooled=settings.db_pooled,
+    )
     try:
         yield db
     finally:

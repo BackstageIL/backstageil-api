@@ -22,6 +22,10 @@ dev = [
     "ruff>=0.16.8",
 ]
 
+[tool.vercel]
+# Vercel (production hosting) loads this ASGI app; see docs/deploy.md
+entrypoint = "app.main:app"
+
 [tool.uv]
 # Application, not a library: nothing to build or publish.
 package = false

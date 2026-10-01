@@ -50,3 +50,33 @@ def test_real_database_is_reachable() -> None:
             await database.dispose()
 
     asyncio.run(ping())
+
+
+def test_pooled_mode_disables_statement_caches() -> None:
+    url = "postgresql://u:p@ep-x-pooler.eu-central-1.aws.neon.tech/app?sslmode=require"
+
+    pooled = Database(url, pooled=True)
+    direct = Database(url)
+
+    assert pooled.connect_args == {
+        "ssl": True,
+        "statement_cache_size": 0,
+        "prepared_statement_cache_size": 0,
+    }
+    assert direct.connect_args == {"ssl": True}
+
+
+def test_pooled_app_uses_a_small_pool() -> None:
+    from fastapi.testclient import TestClient
+
+    from app.main import create_app
+
+    settings = Settings(
+        _env_file=None,
+        database_url="postgresql://u:p@localhost:1/db",
+        db_pooled=True,
+    )
+    with TestClient(create_app(settings)) as client:
+        database = client.app.state.database  # type: ignore[attr-defined]
+        assert database.engine.pool.size() == 1
+        assert database.connect_args["statement_cache_size"] == 0

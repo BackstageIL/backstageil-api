@@ -24,8 +24,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     else:
         app.state.database = Database(
             settings.database_url.get_secret_value(),
-            pool_size=settings.db_pool_size,
-            max_overflow=settings.db_max_overflow,
+            # serverless: each instance keeps only a tiny pool; the pooler multiplexes
+            pool_size=1 if settings.db_pooled else settings.db_pool_size,
+            max_overflow=2 if settings.db_pooled else settings.db_max_overflow,
+            pooled=settings.db_pooled,
         )
     try:
         yield
