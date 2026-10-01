@@ -26,7 +26,8 @@ def item(**hall_overrides: Any) -> dict[str, Any]:
             "name": "Main hall",
             "stage_width_m": 7.5,
             "power_circuits_a": [32, 63],
-            "extras": {"green_room": {"value": True, "note": "huge"}},
+            "has_green_room": True,
+            "extras": {"stage_cameras": {"label": "Stage cameras", "note": "Cover them"}},
             "field_notes": {"power_circuits_a": "2\u00d763 A, 1\u00d7125 A"},
         }
         | hall_overrides,
@@ -38,7 +39,8 @@ def test_valid_item_and_database_values() -> None:
 
     values = parsed.hall_values()
     assert values["stage_width_m"] == Decimal("7.5")
-    assert values["extras"] == {"green_room": {"value": True, "note": "huge"}}
+    assert values["has_green_room"] is True
+    assert values["extras"] == {"stage_cameras": {"label": "Stage cameras", "note": "Cover them"}}
     assert values["field_notes"] == {"power_circuits_a": "2\u00d763 A, 1\u00d7125 A"}
 
 
@@ -73,7 +75,9 @@ def test_technical_text_is_allowed(text: str) -> None:
     "overrides",
     [
         {"notes": "ask Moshe 050-1234567"},
-        {"extras": {"green_room": {"value": True, "note": "boss@venue.com"}}},
+        {"extras": {"stage_cameras": {"label": "Cameras", "note": "boss@venue.com"}}},
+        {"extras": {"stage_cameras": {"label": "Call 0541234567", "value": True}}},
+        {"seat_kills": "ask Avi 052-7654321"},
         {"field_notes": {"stage_width_m": "call 0541234567"}},
     ],
 )
@@ -89,7 +93,10 @@ def test_contact_details_hidden_in_hall_text_are_rejected(overrides: dict[str, A
         {"capacity_seated": -1},
         {"stage_width_m": 0},
         {"power_circuits_a": [0]},
-        {"extras": {"greenroom": {"value": True}}},  # unknown extra
+        {"extras": {"stage_cameras": {"value": True}}},  # unregistered extra without label
+        {"extras": {"has_green_room": {"value": True}}},  # fixed column used as extra
+        {"follow_spot_positions": -1},
+        {"first_pipe_distance_m": -0.5},
         {"unknown_column": 1},  # typo in a field name
     ],
 )
@@ -112,3 +119,23 @@ def test_load_items_reports_all_problems_and_duplicates(tmp_path: Path) -> None:
     good = tmp_path / "good.json"
     good.write_text(json.dumps([item()]))
     assert len(load_items(good)) == 1
+
+
+def test_import_schema_covers_every_hall_column() -> None:
+    """A new hall column must also be importable (and vice versa)."""
+    from app.db.models import Hall
+    from app.schemas.venue_import import HallImport
+
+    bookkeeping = {
+        "id",
+        "venue_id",
+        "extras",
+        "field_notes",
+        "is_published",
+        "created_at",
+        "updated_at",
+    }
+    model_columns = set(Hall.__table__.columns.keys()) - bookkeeping
+    schema_fields = set(HallImport.model_fields) - {"extras", "field_notes"}
+
+    assert model_columns == schema_fields

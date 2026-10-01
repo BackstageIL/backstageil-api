@@ -45,11 +45,12 @@ class PipeType(StrEnum):
 
 
 class Hall(TimestampMixin, Base):
-    """A stage/auditorium inside a venue, with its technical specs.
+    """A stage/auditorium inside a venue, described like a venue technical document.
 
-    Fixed columns hold what every hall has (typed, filterable). Venue-specific items go in
-    `extras` ({key: {"value", "note"}}, keys from app.schemas.hall_extras.EXTRA_SPECS);
-    `field_notes` holds free-text notes on fixed columns ({"proscenium_width_m": "12-16 m"}).
+    Fixed columns hold what halls generally have (typed, filterable). `field_notes` holds a
+    short factual note per fixed column ({"proscenium_width_m": "Adjustable, 12-16 m"}).
+    `extras` is only for items particular to this hall ({key: {"label", "value", "note"}},
+    see app.schemas.hall_extras).
     """
 
     __tablename__ = "halls"
@@ -77,6 +78,11 @@ class Hall(TimestampMixin, Base):
             "pipe_count >= 0 AND pipe_load_kg >= 0 AND dressing_rooms >= 0",
             name="counts_non_negative",
         ),
+        CheckConstraint(
+            "first_pipe_distance_m >= 0 AND follow_spot_positions >= 0"
+            " AND star_dressing_rooms >= 0",
+            name="document_values_non_negative",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -84,30 +90,64 @@ class Hall(TimestampMixin, Base):
     slug: Mapped[str] = mapped_column(String(80))
     name: Mapped[str] = mapped_column(String(150))
 
-    # Audience
+    # Sections follow a venue technical document. Every fixed column may carry a short
+    # factual note in `field_notes`.
+
+    # General
     capacity_seated: Mapped[int | None] = mapped_column(Integer)
     capacity_standing: Mapped[int | None] = mapped_column(Integer)
+    # Access
+    load_in_notes: Mapped[str | None] = mapped_column(Text)
+    case_storage: Mapped[bool | None] = mapped_column(Boolean)
     # Stage (meters)
     stage_width_m: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
     stage_depth_m: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
     proscenium_width_m: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
     stage_floor: Mapped[StageFloor | None] = mapped_column(str_enum(StageFloor, "stage_floor"))
+    has_orchestra_pit: Mapped[bool | None] = mapped_column(Boolean)
+    has_stairs_to_house: Mapped[bool | None] = mapped_column(Boolean)
+    has_quick_change_area: Mapped[bool | None] = mapped_column(Boolean)
     # Rigging
     grid_height_m: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
     pipe_count: Mapped[int | None] = mapped_column(SmallInteger)
     pipe_type: Mapped[PipeType | None] = mapped_column(str_enum(PipeType, "pipe_type"))
     pipe_load_kg: Mapped[int | None] = mapped_column(Integer)
+    first_pipe_distance_m: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    foh_truss_possible: Mapped[bool | None] = mapped_column(Boolean)
+    has_lighting_bridge: Mapped[bool | None] = mapped_column(Boolean)
+    pa_flying_possible: Mapped[bool | None] = mapped_column(Boolean)
+    truss_hanging_possible: Mapped[bool | None] = mapped_column(Boolean)
+    # Masking
+    has_masking: Mapped[bool | None] = mapped_column(Boolean)
+    has_black_legs: Mapped[bool | None] = mapped_column(Boolean)
     # Power: available circuits in amps, e.g. [32, 63, 125]
     power_circuits_a: Mapped[list[int]] = mapped_column(
         ARRAY(Integer), default=list, server_default=text("'{}'")
     )
     has_backup_generator: Mapped[bool | None] = mapped_column(Boolean)
-    # Rules / FOH / backstage
-    haze_allowed: Mapped[bool | None] = mapped_column(Boolean)
+    # Sound
+    house_pa: Mapped[str | None] = mapped_column(String(200))
+    foh_position: Mapped[str | None] = mapped_column(String(200))
     foh_distance_m: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    # Lighting / video
+    follow_spot_positions: Mapped[int | None] = mapped_column(SmallInteger)
+    has_video_space: Mapped[bool | None] = mapped_column(Boolean)
+    # Backstage
     dressing_rooms: Mapped[int | None] = mapped_column(SmallInteger)
-    # Free text
-    load_in_notes: Mapped[str | None] = mapped_column(Text)
+    star_dressing_rooms: Mapped[int | None] = mapped_column(SmallInteger)
+    has_green_room: Mapped[bool | None] = mapped_column(Boolean)
+    has_showers: Mapped[bool | None] = mapped_column(Boolean)
+    has_artist_toilets: Mapped[bool | None] = mapped_column(Boolean)
+    has_production_office: Mapped[bool | None] = mapped_column(Boolean)
+    has_laundry: Mapped[bool | None] = mapped_column(Boolean)
+    has_wifi: Mapped[bool | None] = mapped_column(Boolean)
+    # Rules
+    haze_allowed: Mapped[bool | None] = mapped_column(Boolean)
+    stage_screws_allowed: Mapped[bool | None] = mapped_column(Boolean)
+    # Seating
+    seat_kills: Mapped[str | None] = mapped_column(Text)  # seats lost for FOH / follow spots
+    sightlines: Mapped[str | None] = mapped_column(Text)
+    # Notes (facts only)
     notes: Mapped[str | None] = mapped_column(Text)
     known_issues: Mapped[str | None] = mapped_column(Text)
 

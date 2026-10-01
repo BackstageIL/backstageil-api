@@ -1,27 +1,32 @@
 """
-Registry and validation for hall `extras` and `field_notes` (JSONB columns on halls).
+Validation for the hall JSON columns `extras` and `field_notes`.
 
-extras      = {"green_room": {"value": true, "note": "huge"}, "showers": {"value": true}}
-field_notes = {"proscenium_width_m": "12-16 m, adjustable"}
+field_notes = {"proscenium_width_m": "Adjustable, 12-16 m"}   # a short fact per fixed column
+extras      = {"stage_cameras": {"label": "Stage cameras",    # items particular to one hall
+                                 "note": "4 cameras on stage must be covered"}}
 
-To add a new extra field: add one entry to EXTRA_SPECS. No database migration is needed.
+Anything most halls have is a fixed column on `halls`, not an extra. EXTRA_SPECS lists the few
+optional items that recur occasionally (label/type defined here); any other snake_case key is
+allowed as long as it carries its own label.
 """
 
+import re
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel, model_validator
 
+from app.db.models import Hall
+
 
 class ExtraCategory(StrEnum):
     STAGE = "stage"
     RIGGING = "rigging"
-    POWER_VIDEO = "power_video"
-    FOH = "foh"
-    MASKING = "masking"
+    SOUND = "sound"
     BACKSTAGE = "backstage"
-    RULES = "rules"
+    ACCESS = "access"
+    OTHER = "other"
 
 
 class ValueType(StrEnum):
@@ -39,74 +44,39 @@ class ExtraSpec:
     unit: str | None = None
 
 
-_S, _R, _PV, _F, _M, _B, _RU = (
-    ExtraCategory.STAGE,
-    ExtraCategory.RIGGING,
-    ExtraCategory.POWER_VIDEO,
-    ExtraCategory.FOH,
-    ExtraCategory.MASKING,
-    ExtraCategory.BACKSTAGE,
-    ExtraCategory.RULES,
-)
-_BOOL, _TEXT = ValueType.BOOL, ValueType.TEXT
-
 EXTRA_SPECS: dict[str, ExtraSpec] = {
-    # Stage
-    "stage_stairs": ExtraSpec("Stairs to the stage", _S, _BOOL),
-    "backstage_work_light": ExtraSpec("Backstage work light", _S, _BOOL),
-    "quick_change": ExtraSpec("Quick-change area", _S, _BOOL),
-    # Rigging
-    "foh_truss": ExtraSpec("FOH truss", _R, _BOOL),
-    "pa_hanging": ExtraSpec("PA hanging possible", _R, _BOOL),
-    "truss_hanging": ExtraSpec("Truss hanging possible (LED / video / lights)", _R, _BOOL),
-    # Power & video
-    "onstage_video_space": ExtraSpec("On-stage video space", _PV, _BOOL),
-    # FOH
-    "follow_spot_positions": ExtraSpec("Follow-spot positions", _F, _TEXT),
-    "seats_to_remove": ExtraSpec("Seats to remove (FOH / follow spots)", _F, _TEXT),
-    "sightline_issues": ExtraSpec("Sightline issues", _F, _TEXT),
-    # Masking
-    "masking": ExtraSpec("Masking", _M, _BOOL),
-    "black_legs": ExtraSpec("Black legs", _M, _BOOL),
-    # Backstage
-    "star_dressing_room": ExtraSpec("Star dressing room", _B, _BOOL),
-    "green_room": ExtraSpec("Green room", _B, _BOOL),
-    "mirrors_full_body": ExtraSpec("Full-body mirrors", _B, _BOOL),
-    "mirrors_makeup": ExtraSpec("Make-up mirrors", _B, _BOOL),
-    "tables": ExtraSpec("Tables", _B, _BOOL),
-    "chairs": ExtraSpec("Chairs", _B, _BOOL),
-    "clothes_hangers": ExtraSpec("Clothes hangers / rails", _B, _BOOL),
-    "showers": ExtraSpec("Showers", _B, _BOOL),
-    "artist_toilets": ExtraSpec("Artist toilets", _B, _BOOL),
-    "production_office": ExtraSpec("Production office", _B, _BOOL),
-    "washer_dryer": ExtraSpec("Washing machine / dryer", _B, _BOOL),
-    "internet": ExtraSpec("Internet / Wi-Fi", _B, _BOOL),
-    "empty_case_storage": ExtraSpec("Empty case storage", _B, _BOOL),
-    # Rules
-    "stage_screws_allowed": ExtraSpec("Screwing into the stage allowed", _RU, _BOOL),
+    "stage_shape": ExtraSpec("Stage shape", ExtraCategory.STAGE, ValueType.TEXT),
+    "stage_extension": ExtraSpec("Stage extension", ExtraCategory.STAGE, ValueType.TEXT),
 }
 
-# Fixed hall columns that may carry a free-text note in `field_notes`.
+# Columns that are not technical facts, or are free text themselves: no field notes for them.
+_NOT_NOTED = {
+    "id",
+    "venue_id",
+    "slug",
+    "name",
+    "extras",
+    "field_notes",
+    "source",
+    "last_verified_at",
+    "is_published",
+    "created_at",
+    "updated_at",
+    "load_in_notes",
+    "notes",
+    "known_issues",
+    "seat_kills",
+    "sightlines",
+    "house_pa",
+    "foh_position",
+}
+
+# Every technical fixed column of `halls` may carry a note (derived from the model).
 FIELD_NOTE_KEYS: frozenset[str] = frozenset(
-    {
-        "capacity_seated",
-        "capacity_standing",
-        "stage_width_m",
-        "stage_depth_m",
-        "proscenium_width_m",
-        "stage_floor",
-        "grid_height_m",
-        "pipe_count",
-        "pipe_type",
-        "pipe_load_kg",
-        "power_circuits_a",
-        "has_backup_generator",
-        "haze_allowed",
-        "foh_distance_m",
-        "dressing_rooms",
-    }
+    column.name for column in Hall.__table__.columns if column.name not in _NOT_NOTED
 )
 
+_KEY = re.compile(r"^[a-z][a-z0-9]*(_[a-z0-9]+)*$")
 _PYTHON_TYPES: dict[ValueType, tuple[type, ...]] = {
     ValueType.BOOL: (bool,),
     ValueType.INT: (int,),
@@ -118,6 +88,7 @@ _PYTHON_TYPES: dict[ValueType, tuple[type, ...]] = {
 class ExtraValue(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    label: str | None = Field(default=None, min_length=2, max_length=80)
     value: bool | int | float | str | None = None
     note: str | None = Field(default=None, max_length=500)
 
@@ -129,14 +100,20 @@ class ExtraValue(BaseModel):
 
 
 class HallExtras(RootModel[dict[str, ExtraValue]]):
-    """Validates the `extras` JSON: only registered keys, each value of its declared type."""
+    """Registered keys are type-checked; other keys must be snake_case and carry a label."""
 
     @model_validator(mode="after")
-    def keys_and_types_match_registry(self) -> Self:
+    def keys_and_types(self) -> Self:
         for key, extra in self.root.items():
+            if key in FIELD_NOTE_KEYS or key in Hall.__table__.columns:
+                raise ValueError(f"'{key}' is a fixed hall column, not an extra")
             spec = EXTRA_SPECS.get(key)
             if spec is None:
-                raise ValueError(f"unknown extra '{key}'")
+                if not _KEY.match(key):
+                    raise ValueError(f"extra key '{key}' must be snake_case")
+                if not extra.label:
+                    raise ValueError(f"extra '{key}' is not registered and needs a label")
+                continue
             if extra.value is None:
                 continue
             allowed = _PYTHON_TYPES[spec.value_type]
@@ -150,11 +127,11 @@ class HallExtras(RootModel[dict[str, ExtraValue]]):
 
 
 class HallFieldNotes(RootModel[dict[str, str]]):
-    """Validates `field_notes`: notes only for known fixed hall columns."""
+    """Validates `field_notes`: notes only for technical fixed hall columns."""
 
     @model_validator(mode="after")
     def keys_are_fixed_columns(self) -> Self:
         unknown = set(self.root) - FIELD_NOTE_KEYS
         if unknown:
-            raise ValueError(f"no fixed hall column named {sorted(unknown)}")
+            raise ValueError(f"no technical hall column named {sorted(unknown)}")
         return self

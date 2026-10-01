@@ -105,6 +105,14 @@ async def test_negative_capacity_is_rejected(session: AsyncSession) -> None:
     )
 
 
+async def test_negative_document_values_are_rejected(session: AsyncSession) -> None:
+    venue = await _venue(session, await _city(session, 10, "Testcity"), "Test Venue")
+
+    await _expect_integrity_error(
+        session, Hall(venue_id=venue.id, slug="main", name="Main", follow_spot_positions=-1)
+    )
+
+
 async def test_invalid_enum_value_is_rejected_by_database(session: AsyncSession) -> None:
     city = await _city(session, 7, "Testcity")
     with pytest.raises(IntegrityError):
@@ -150,7 +158,7 @@ async def test_extras_and_power_filters(session: AsyncSession) -> None:
         name="Big",
         stage_width_m=Decimal("24.00"),
         power_circuits_a=[32, 63, 125],
-        extras={"green_room": {"value": True, "note": "huge"}},
+        extras={"stage_cameras": {"label": "Stage cameras", "value": True}},
     )
     small = Hall(
         venue_id=venue.id,
@@ -158,21 +166,21 @@ async def test_extras_and_power_filters(session: AsyncSession) -> None:
         name="Small",
         stage_width_m=Decimal("10.00"),
         power_circuits_a=[32],
-        extras={"green_room": {"value": False}},
+        extras={"stage_cameras": {"label": "Stage cameras", "value": False}},
     )
     session.add_all([big, small])
     await session.flush()
 
     in_venue = Hall.venue_id == venue.id
-    with_green_room = await session.scalars(
-        select(Hall.slug).where(in_venue, Hall.extras.contains({"green_room": {"value": True}}))
+    with_cameras = await session.scalars(
+        select(Hall.slug).where(in_venue, Hall.extras.contains({"stage_cameras": {"value": True}}))
     )
     with_125a = await session.scalars(
         select(Hall.slug).where(in_venue, Hall.power_circuits_a.contains([125]))
     )
     wide_stage = await session.scalars(select(Hall.slug).where(in_venue, Hall.stage_width_m >= 12))
 
-    assert list(with_green_room) == ["big"]
+    assert list(with_cameras) == ["big"]
     assert list(with_125a) == ["big"]
     assert list(wide_stage) == ["big"]
 
@@ -181,7 +189,7 @@ async def test_extras_and_power_filters(session: AsyncSession) -> None:
     ("query", "index_name"),
     [
         (
-            'SELECT id FROM halls WHERE extras @> \'{"green_room": {"value": true}}\'',
+            'SELECT id FROM halls WHERE extras @> \'{"stage_cameras": {"value": true}}\'',
             "ix_halls_extras",
         ),
         ("SELECT id FROM halls WHERE power_circuits_a @> ARRAY[125]", "ix_halls_power_circuits_a"),

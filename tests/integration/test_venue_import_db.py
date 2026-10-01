@@ -53,7 +53,11 @@ async def test_import_creates_then_updates_without_duplicates(
 
     second = await import_venue(
         session,
-        make_item(capacity_seated=650, extras={"green_room": {"value": True}}),
+        make_item(
+            capacity_seated=650,
+            has_green_room=True,
+            extras={"stage_cameras": {"label": "Stage cameras", "value": True}},
+        ),
         publish=True,
     )
     assert (second.venue_created, second.hall_created) == (False, False)
@@ -66,7 +70,8 @@ async def test_import_creates_then_updates_without_duplicates(
     await session.refresh(halls[0])
     await session.refresh(venue)
     assert halls[0].capacity_seated == 650
-    assert halls[0].extras == {"green_room": {"value": True}}
+    assert halls[0].has_green_room is True
+    assert halls[0].extras == {"stage_cameras": {"label": "Stage cameras", "value": True}}
     assert venue.is_published and halls[0].is_published
 
 
