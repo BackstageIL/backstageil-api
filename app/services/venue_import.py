@@ -7,8 +7,9 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.expression import ColumnClause
 
-from app.core.exceptions import UnknownCityError
+from app.core.exceptions import DuplicateSlugsError, UnknownCityError
 from app.db.models import City, Hall, Venue
+from app.schemas.admin import ImportReport
 from app.schemas.venue_import import VenueImportItem
 
 
@@ -75,4 +76,32 @@ async def import_venue(
         hall_slug=item.hall.slug,
         venue_created=bool(venue_row[1]),
         hall_created=bool(hall_row[1]),
+    )
+
+
+def duplicate_slugs(items: list[VenueImportItem]) -> list[str]:
+    slugs = [item.venue.slug for item in items]
+    return sorted({slug for slug in slugs if slugs.count(slug) > 1})
+
+
+async def import_items(
+    session: AsyncSession, items: list[VenueImportItem], *, publish: bool, dry_run: bool = False
+) -> ImportReport:
+    """Import every item (all-or-nothing within the caller's transaction).
+
+    The upload decides visibility: every venue and hall gets is_published=publish.
+    """
+    duplicates = duplicate_slugs(items)
+    if duplicates:
+        raise DuplicateSlugsError(duplicates)
+    results = [await import_venue(session, item, publish=publish) for item in items]
+    venues_created = sum(r.venue_created for r in results)
+    halls_created = sum(r.hall_created for r in results)
+    return ImportReport(
+        items=len(results),
+        venues_created=venues_created,
+        venues_updated=len(results) - venues_created,
+        halls_created=halls_created,
+        halls_updated=len(results) - halls_created,
+        dry_run=dry_run,
     )
