@@ -33,7 +33,10 @@ class Settings(BaseSettings):
     admin_max_failed_attempts: int = Field(default=10, ge=1)
     admin_failed_window_seconds: int = Field(default=300, ge=1)
 
-    @field_validator("database_url", "admin_api_key_hash", mode="before")
+    # Sentry project DSN for error tracking (BSIL-28). Unset = no error reports are sent.
+    sentry_dsn: SecretStr | None = None
+
+    @field_validator("database_url", "admin_api_key_hash", "sentry_dsn", mode="before")
     @classmethod
     def empty_value_is_unset(cls, value: object) -> object:
         # `DATABASE_URL=` (as in .env.example) means "not set", not an empty value.

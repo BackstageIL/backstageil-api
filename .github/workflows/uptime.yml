@@ -1,0 +1,38 @@
+name: Uptime
+
+# Checks production on a schedule with the release smoke test (health, readiness, venues, cities).
+# A failed run is the alert: GitHub emails failed scheduled runs (see docs/monitoring.md).
+
+on:
+  schedule:
+    # Every 30 minutes (off the hour, when GitHub's scheduler is busiest). Each check wakes the
+    # Neon PROD compute for a few minutes, so keep it moderate on the free plan.
+    - cron: "7,37 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uptime
+  cancel-in-progress: true
+
+jobs:
+  uptime:
+    if: vars.PRODUCTION_URL != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          enable-cache: true
+
+      - name: Install dependencies (locked)
+        run: uv sync --locked
+
+      - name: Smoke test production
+        env:
+          PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
+        run: uv run python -m scripts.smoke_test "$PRODUCTION_URL"

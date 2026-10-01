@@ -58,4 +58,5 @@ in GitHub Actions secrets / Vercel / Cloudflare. gitleaks and GitHub push protec
 
 Vercel, region fra1; release = CI green on main → `.github/workflows/deploy.yml` (migrate PROD →
 deploy without traffic → smoke test → promote). Runbook: `docs/deploy.md`. Production uses
-`DB_POOLED=true` with Neon's pooled endpoint. Before AdSense goes live, revisit Vercel Hobby (non-commercial).
+`DB_POOLED=true` with Neon's pooled endpoint. Monitoring (uptime workflow, Sentry, never send credentials or frame
+locals): `docs/monitoring.md`. Before AdSense goes live, revisit Vercel Hobby (non-commercial).

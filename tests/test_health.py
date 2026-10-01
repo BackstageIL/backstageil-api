@@ -1,3 +1,5 @@
+import warnings
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -47,12 +49,27 @@ def test_readiness_with_unreachable_database_is_503(app: FastAPI, client: TestCl
     assert response.json()["error_code"] == "DATABASE_UNAVAILABLE"
 
 
+def test_health_checks_answer_head(app: FastAPI, client: TestClient) -> None:
+    app.dependency_overrides[get_database] = lambda: FakeDatabase(reachable=True)
+
+    assert client.head("/health").status_code == 200
+    assert client.head("/health/ready").status_code == 200
+
+
+def test_head_readiness_reports_an_unreachable_database(app: FastAPI, client: TestClient) -> None:
+    app.dependency_overrides[get_database] = lambda: FakeDatabase(reachable=False)
+
+    assert client.head("/health/ready").status_code == 503
+
+
 def test_unknown_route_is_404(client: TestClient) -> None:
     assert client.get("/api/v1/does-not-exist").status_code == 404
 
 
 def test_openapi_docs_available(client: TestClient) -> None:
-    response = client.get("/openapi.json")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # e.g. duplicate operation ids
+        response = client.get("/openapi.json")
 
     assert response.status_code == 200
     assert response.json()["info"]["title"] == "BackstageIL API"
