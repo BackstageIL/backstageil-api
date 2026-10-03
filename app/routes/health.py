@@ -14,12 +14,15 @@ router = APIRouter(prefix="/health", tags=["Health"])
 
 
 @router.get("", summary="Liveness check")
+# HEAD too (hidden from the docs): uptime monitors often probe with HEAD and read 405 as "down"
+@router.head("", include_in_schema=False)
 async def liveness() -> HealthResponse:
     """The process is up. No dependencies are checked (used by the platform to restart the app)."""
     return HealthResponse()
 
 
 @router.get("/ready", summary="Readiness check")
+@router.head("/ready", include_in_schema=False)
 async def readiness(database: Annotated[Database, Depends(get_database)]) -> HealthResponse:
     """The app can serve traffic: the database is configured and reachable (used before a
     blue-green switch)."""

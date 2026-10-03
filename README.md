@@ -105,6 +105,7 @@ curl -X POST -H "X-API-Key: $ADMIN_KEY" -H 'Content-Type: application/json' \
 
 Production runs on Vercel (region `fra1`) with controlled blue-green releases from GitHub
 Actions; previews per pull request. See [docs/deploy.md](docs/deploy.md).
+Monitoring (uptime checks, Sentry error tracking): [docs/monitoring.md](docs/monitoring.md).
 
 ## Docker
 

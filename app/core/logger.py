@@ -1,4 +1,4 @@
-"""JSON logging to stdout, so Cloud Run / Cloud Logging picks up severity and message fields."""
+"""JSON logging to stdout, so the hosting log viewer (Vercel) shows severity and message fields."""
 
 import json
 import logging

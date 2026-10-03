@@ -24,6 +24,7 @@ Vercel environment variables (Project → Settings → Environment Variables):
 | `ENVIRONMENT` | `production` | `ci` |
 | `ADMIN_API_KEY_HASH` | hash of the production admin key | hash of the dev admin key |
 | `CORS_ORIGINS` | the website origin(s), once it exists | — |
+| `SENTRY_DSN` | Sentry project DSN (see [monitoring.md](monitoring.md)) | — |
 
 GitHub (`BackstageIL/backstageil-api`):
 
