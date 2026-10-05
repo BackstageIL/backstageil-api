@@ -6,8 +6,8 @@ requires-python = ">=3.14,<3.15"
 dependencies = [
     "alembic>=1.20.0",
     "asyncpg>=0.31.0",
-    "boto3>=1.43.108",
     "fastapi>=0.141.1",
+    "httpx2>=2.13.1",
     "pillow>=12.3.0",
     "pydantic-settings>=2.15.0",
     "python-multipart>=0.0.32",
@@ -18,8 +18,6 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "boto3-stubs[s3]>=1.43.108",
-    "httpx2>=2.13.1",
     "mypy>=2.3.1",
     "pre-commit>=4.6.2",
     "pytest>=9.1.1",

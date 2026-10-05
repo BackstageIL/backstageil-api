@@ -1,6 +1,6 @@
 """Hall pictures API (admin upload/edit/delete, public gallery) against a real database.
 
-Files go to an in-memory storage instead of R2; rows are rolled back after each test.
+Files go to an in-memory storage instead of Vercel Blob; rows are rolled back after each test.
 """
 
 from collections.abc import AsyncIterator, Sequence
@@ -274,8 +274,8 @@ async def test_storage_failure_saves_no_row(
 
 
 async def test_upload_without_configuration_is_503(session: AsyncSession, hall: Hall) -> None:
-    async with make_client(session, storage=None) as no_r2:
-        response = await upload(no_r2, jpeg())
+    async with make_client(session, storage=None) as no_storage:
+        response = await upload(no_storage, jpeg())
     assert response.status_code == 503
     assert response.json()["error_code"] == "PICTURES_NOT_CONFIGURED"
 

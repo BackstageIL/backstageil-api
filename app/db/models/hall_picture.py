@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 
 class HallPicture(Base):
-    """A picture of a hall. The files live in object storage (R2); this row points to them.
+    """A picture of a hall. The files live in object storage (Vercel Blob); this row points to them.
 
     `storage_key` is a prefix built from the content hash; each size is a file under it
     (`<storage_key>/large.webp`, `<storage_key>/thumb.webp`). width/height are of the large size.

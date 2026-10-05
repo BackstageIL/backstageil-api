@@ -1,7 +1,7 @@
 """
 Hall pictures: the gallery query (public and admin) and admin upload / edit / delete.
 
-Rows live in `hall_pictures`; files live in picture storage (R2). On upload the files are
+Rows live in `hall_pictures`; files live in picture storage (Vercel Blob). On upload the files are
 written before the row, on delete the row is removed before the files: a failure in between
 can leave an unused file in the bucket, never a row pointing to a missing file.
 """
@@ -23,7 +23,7 @@ from app.core.exceptions import (
 from app.db.models import Hall, HallPicture, Venue
 from app.schemas.pictures import Picture, PicturePatch
 from app.services.picture_processing import file_key, file_keys, process_picture
-from app.services.picture_storage import PictureStorage
+from app.services.picture_storage import PictureStorage, public_base_url
 from app.services.venues import find_hall
 
 MAX_PICTURES_PER_HALL = 20
@@ -33,14 +33,13 @@ _MAX_DISPLAY_ORDER = 32767
 
 
 def get_pictures_base_url(request: Request) -> str | None:
-    """Route dependency: public base URL of the picture bucket, without a trailing slash."""
-    base_url = request.app.state.settings.pictures_base_url
-    return None if base_url is None else str(base_url).rstrip("/")
+    """Route dependency: public base URL of picture files, without a trailing slash."""
+    return public_base_url(request.app.state.settings)
 
 
 def require_base_url(base_url: str | None) -> str:
     if base_url is None:
-        raise PicturesNotConfiguredError("PICTURES_BASE_URL")
+        raise PicturesNotConfiguredError("BLOB_READ_WRITE_TOKEN or PICTURES_BASE_URL")
     return base_url
 
 

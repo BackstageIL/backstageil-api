@@ -1,31 +1,30 @@
-"""R2 picture storage (with botocore's Stubber: no network) and its route dependencies."""
+"""Vercel Blob picture storage (HTTP calls checked with a mock transport: no network)."""
 
-from collections.abc import Iterator
+import json
 from types import SimpleNamespace
 from typing import Any
 
+import httpx2
 import pytest
-from botocore.stub import Stubber
 
 from app.core.config import Settings
 from app.core.exceptions import PicturesNotConfiguredError, PictureStorageUnavailableError
 from app.services.picture_storage import (
-    IMMUTABLE_CACHE_CONTROL,
-    R2Storage,
+    BLOB_API_URL,
+    CACHE_MAX_AGE_SECONDS,
+    VercelBlobStorage,
+    blob_store_url,
     delete_files_quietly,
     get_optional_picture_storage,
     get_picture_storage,
+    public_base_url,
     storage_from_settings,
 )
 
 pytestmark = pytest.mark.anyio
 
-R2: dict[str, Any] = {
-    "r2_account_id": "0123456789abcdef",
-    "r2_access_key_id": "test-access-key",
-    "r2_secret_access_key": "test-secret-key",
-    "r2_bucket": "test-bucket",
-}
+TOKEN = "vercel_blob_rw_AbC123xyz_s3cretPart_with_underscores"
+STORE_URL = "https://abc123xyz.public.blob.vercel-storage.com"
 
 
 @pytest.fixture
@@ -33,16 +32,21 @@ def anyio_backend() -> str:
     return "asyncio"
 
 
-@pytest.fixture
-def storage() -> R2Storage:
-    return R2Storage("0123456789abcdef", "test-access-key", "test-secret-key", "test-bucket")
+class Recorder:
+    """Mock transport handler: records requests and answers with a fixed status."""
+
+    def __init__(self, status: int = 200, body: dict[str, Any] | None = None) -> None:
+        self.status = status
+        self.body = body or {}
+        self.requests: list[httpx2.Request] = []
+
+    def __call__(self, request: httpx2.Request) -> httpx2.Response:
+        self.requests.append(request)
+        return httpx2.Response(self.status, json=self.body)
 
 
-@pytest.fixture
-def stub(storage: R2Storage) -> Iterator[Stubber]:
-    with Stubber(storage._client) as stubber:
-        yield stubber
-        stubber.assert_no_pending_responses()
+def storage_with(recorder: Recorder) -> VercelBlobStorage:
+    return VercelBlobStorage(TOKEN, transport=httpx2.MockTransport(recorder))
 
 
 def request_for(settings: Settings) -> Any:
@@ -51,74 +55,100 @@ def request_for(settings: Settings) -> Any:
     )
 
 
-def test_client_points_at_the_account_endpoint(storage: R2Storage) -> None:
-    assert storage._client.meta.endpoint_url == "https://0123456789abcdef.r2.cloudflarestorage.com"
+def test_store_url_comes_from_the_token() -> None:
+    assert blob_store_url(TOKEN) == STORE_URL
 
 
-async def test_put_stores_an_immutable_file(storage: R2Storage, stub: Stubber) -> None:
-    stub.add_response(
-        "put_object",
-        {},
-        {
-            "Bucket": "test-bucket",
-            "Key": "pictures/abc/large.webp",
-            "Body": b"webp-bytes",
-            "ContentType": "image/webp",
-            "CacheControl": IMMUTABLE_CACHE_CONTROL,
-        },
-    )
-
-    await storage.put("pictures/abc/large.webp", b"webp-bytes", "image/webp")
+@pytest.mark.parametrize(
+    "token", ["", "not-a-token", "vercel_blob_rw_", "vercel_blob_ro_abc_secret", "a_b_c_d_e"]
+)
+def test_malformed_token_is_not_configured(token: str) -> None:
+    with pytest.raises(PicturesNotConfiguredError):
+        blob_store_url(token)
 
 
-async def test_delete_removes_all_keys_in_one_request(storage: R2Storage, stub: Stubber) -> None:
+async def test_put_uploads_a_public_immutable_file() -> None:
+    recorder = Recorder(body={"url": f"{STORE_URL}/pictures/abc/large.webp"})
+
+    await storage_with(recorder).put("pictures/abc/large.webp", b"webp-bytes", "image/webp")
+
+    (request,) = recorder.requests
+    assert request.method == "PUT"
+    assert str(request.url) == f"{BLOB_API_URL}?pathname=pictures%2Fabc%2Flarge.webp"
+    assert request.content == b"webp-bytes"
+    assert request.headers["authorization"] == f"Bearer {TOKEN}"
+    assert request.headers["x-api-version"] == "11"
+    assert request.headers["x-vercel-blob-access"] == "public"
+    assert request.headers["x-content-type"] == "image/webp"
+    assert request.headers["x-add-random-suffix"] == "0"
+    assert request.headers["x-cache-control-max-age"] == str(CACHE_MAX_AGE_SECONDS)
+
+
+async def test_delete_sends_all_urls_in_one_request() -> None:
+    recorder = Recorder()
     keys = ["pictures/abc/large.webp", "pictures/abc/thumb.webp"]
-    stub.add_response(
-        "delete_objects",
-        {},
-        {
-            "Bucket": "test-bucket",
-            "Delete": {"Objects": [{"Key": key} for key in keys], "Quiet": True},
-        },
-    )
 
-    await storage.delete(keys)
-    await storage.delete([])  # nothing to delete: no request
+    await storage_with(recorder).delete(keys)
+    await storage_with(recorder).delete([])  # nothing to delete: no request
+
+    (request,) = recorder.requests
+    assert (request.method, str(request.url)) == ("POST", f"{BLOB_API_URL}/delete")
+    assert json.loads(request.content) == {"urls": [f"{STORE_URL}/{key}" for key in keys]}
 
 
-async def test_storage_errors_become_unavailable(storage: R2Storage, stub: Stubber) -> None:
-    stub.add_client_error("put_object", service_error_code="InternalError", http_status_code=500)
+@pytest.mark.parametrize("status", [400, 403, 500, 503])
+async def test_error_answers_become_unavailable(status: int) -> None:
+    recorder = Recorder(status, {"error": {"code": "forbidden", "message": "Invalid token"}})
 
     with pytest.raises(PictureStorageUnavailableError):
-        await storage.put("pictures/abc/large.webp", b"x", "image/webp")
+        await storage_with(recorder).put("pictures/abc/large.webp", b"x", "image/webp")
 
 
-async def test_delete_quietly_swallows_storage_errors(storage: R2Storage, stub: Stubber) -> None:
-    stub.add_client_error("delete_objects", service_error_code="InternalError")
+async def test_network_failure_becomes_unavailable() -> None:
+    def fail(request: httpx2.Request) -> httpx2.Response:
+        raise httpx2.ConnectError("connection refused", request=request)
+
+    storage = VercelBlobStorage(TOKEN, transport=httpx2.MockTransport(fail))
+
+    with pytest.raises(PictureStorageUnavailableError):
+        await storage.delete(["pictures/abc/large.webp"])
+
+
+async def test_delete_quietly_swallows_storage_errors() -> None:
+    storage = storage_with(Recorder(500))
 
     await delete_files_quietly(storage, ["pictures/abc/large.webp"])
     await delete_files_quietly(None, ["pictures/abc/large.webp"])  # not configured: logged only
     await delete_files_quietly(storage, [])
 
 
-def test_storage_needs_all_four_settings() -> None:
+def test_storage_and_base_url_from_settings() -> None:
     assert storage_from_settings(Settings(_env_file=None)) is None
-    partial = {**R2, "r2_secret_access_key": ""}
-    assert storage_from_settings(Settings(_env_file=None, **partial)) is None
-    assert isinstance(storage_from_settings(Settings(_env_file=None, **R2)), R2Storage)
+    assert public_base_url(Settings(_env_file=None)) is None
+
+    settings = Settings(_env_file=None, blob_read_write_token=TOKEN)
+    assert isinstance(storage_from_settings(settings), VercelBlobStorage)
+    assert public_base_url(settings) == STORE_URL
+
+    custom = Settings(
+        _env_file=None, blob_read_write_token=TOKEN, pictures_base_url="https://img.example.com"
+    )
+    assert public_base_url(custom) == "https://img.example.com"
+    assert public_base_url(Settings(_env_file=None, blob_read_write_token="bad")) is None
 
 
 def test_dependencies_create_the_storage_once() -> None:
-    request = request_for(Settings(_env_file=None, **R2))
+    request = request_for(Settings(_env_file=None, blob_read_write_token=TOKEN))
 
     first = get_picture_storage(request)
 
-    assert isinstance(first, R2Storage)
+    assert isinstance(first, VercelBlobStorage)
     assert get_optional_picture_storage(request) is first
 
 
-def test_writing_routes_answer_503_without_r2() -> None:
-    request = request_for(Settings(_env_file=None))
+@pytest.mark.parametrize("token", [None, "malformed"])
+def test_writing_routes_answer_503_without_a_valid_token(token: str | None) -> None:
+    request = request_for(Settings(_env_file=None, blob_read_write_token=token))
 
     assert get_optional_picture_storage(request) is None
     with pytest.raises(PicturesNotConfiguredError):
