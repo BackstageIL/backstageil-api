@@ -6,8 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.cache import public_cache
 from app.db.dependencies import get_session
 from app.db.models import District, VenueType
+from app.schemas.pictures import Picture
 from app.schemas.venue_import import SLUG_PATTERN
 from app.schemas.venues import HallDocument, VenueDetail, VenuePage, VenueSummary
+from app.services import pictures
 from app.services import venues as service
 
 router = APIRouter(prefix="/venues", tags=["Venues"], dependencies=[Depends(public_cache)])
@@ -15,6 +17,7 @@ router = APIRouter(prefix="/venues", tags=["Venues"], dependencies=[Depends(publ
 Session = Annotated[AsyncSession, Depends(get_session)]
 VenueSlug = Annotated[str, Path(pattern=SLUG_PATTERN, max_length=150)]
 HallSlug = Annotated[str, Path(pattern=SLUG_PATTERN, max_length=80)]
+PicturesBaseUrl = Annotated[str | None, Depends(pictures.get_pictures_base_url)]
 NameSearch = Annotated[str | None, Query(min_length=2, max_length=100, description="Name contains")]
 
 
@@ -53,3 +56,15 @@ async def get_venue(session: Session, venue_slug: VenueSlug) -> VenueDetail:
 )
 async def get_hall(session: Session, venue_slug: VenueSlug, hall_slug: HallSlug) -> HallDocument:
     return await service.get_hall(session, venue_slug, hall_slug)
+
+
+@router.get(
+    "/{venue_slug}/halls/{hall_slug}/pictures",
+    summary="Hall pictures",
+    description="In display order. `url` (large) and `thumbnail_url` are WebP files that can be "
+    "used directly in <img>; width/height are of the large size.",
+)
+async def list_hall_pictures(
+    session: Session, base_url: PicturesBaseUrl, venue_slug: VenueSlug, hall_slug: HallSlug
+) -> list[Picture]:
+    return await pictures.list_pictures(session, venue_slug, hall_slug, base_url=base_url)

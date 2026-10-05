@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, HttpUrl, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -36,11 +36,38 @@ class Settings(BaseSettings):
     # Sentry project DSN for error tracking (BSIL-28). Unset = no error reports are sent.
     sentry_dsn: SecretStr | None = None
 
-    @field_validator("database_url", "admin_api_key_hash", "sentry_dsn", mode="before")
+    # Cloudflare R2 bucket for hall pictures (BSIL-24). Uploads are disabled unless all 4 are set.
+    r2_account_id: str | None = None
+    r2_access_key_id: str | None = None
+    r2_secret_access_key: SecretStr | None = None
+    r2_bucket: str | None = None
+    # Public base URL of the bucket (its r2.dev URL or custom domain); picture URLs are built on it.
+    pictures_base_url: HttpUrl | None = None
+
+    @field_validator(
+        "database_url",
+        "admin_api_key_hash",
+        "sentry_dsn",
+        "r2_account_id",
+        "r2_access_key_id",
+        "r2_secret_access_key",
+        "r2_bucket",
+        "pictures_base_url",
+        mode="before",
+    )
     @classmethod
     def empty_value_is_unset(cls, value: object) -> object:
         # `DATABASE_URL=` (as in .env.example) means "not set", not an empty value.
         return None if value == "" else value
+
+    @property
+    def r2_configured(self) -> bool:
+        return None not in (
+            self.r2_account_id,
+            self.r2_access_key_id,
+            self.r2_secret_access_key,
+            self.r2_bucket,
+        )
 
 
 @lru_cache

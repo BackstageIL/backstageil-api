@@ -25,6 +25,10 @@ Vercel environment variables (Project → Settings → Environment Variables):
 | `ADMIN_API_KEY_HASH` | hash of the production admin key | hash of the dev admin key |
 | `CORS_ORIGINS` | the website origin(s), once it exists | — |
 | `SENTRY_DSN` | Sentry project DSN (see [monitoring.md](monitoring.md)) | — |
+| `R2_ACCOUNT_ID` | Cloudflare account ID | same |
+| `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | R2 token for `backstageil-pictures` | R2 token for `backstageil-pictures-dev` |
+| `R2_BUCKET` | `backstageil-pictures` | `backstageil-pictures-dev` |
+| `PICTURES_BASE_URL` | public URL of the production bucket | public URL of the dev bucket |
 
 GitHub (`BackstageIL/backstageil-api`):
 
@@ -38,6 +42,24 @@ GitHub (`BackstageIL/backstageil-api`):
 
 Secrets are set by the owner only (`gh secret set NAME -R BackstageIL/backstageil-api`), never
 committed or pasted into chats.
+
+## Picture storage (Cloudflare R2)
+
+Hall pictures (BSIL-24) are files in R2; the API stores only their keys. Two buckets keep
+dev/preview uploads out of production:
+
+1. Cloudflare dashboard → R2 → create buckets `backstageil-pictures` and
+   `backstageil-pictures-dev` (location hint: Eastern Europe / automatic, Standard storage class).
+2. Each bucket → Settings → Public access: enable the `r2.dev` URL for now; after BSIL-32 connect
+   a custom domain (e.g. `img.<domain>`) so files are cached by the Cloudflare CDN. Only
+   `PICTURES_BASE_URL` changes: rows store keys, never full URLs.
+3. R2 → Manage API tokens → create one token per bucket, permission **Object Read & Write**,
+   scoped to that bucket only. Put the dev values in the local `.env` and the Vercel Preview
+   environment, the production values in Vercel Production.
+
+Files are WebP, immutable (the key contains a content hash) and stored with
+`Cache-Control: public, max-age=31536000, immutable`. Uploads go through the API, so a file can be
+at most 4 MB (Vercel's 4.5 MB request limit).
 
 ## Release flow (blue-green)
 

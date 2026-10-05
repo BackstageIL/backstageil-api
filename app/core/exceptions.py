@@ -31,6 +31,13 @@ class ErrorCode(StrEnum):
     ADMIN_NOT_CONFIGURED = "ADMIN_NOT_CONFIGURED"
     DUPLICATE_SLUGS = "DUPLICATE_SLUGS"
     CONFIRMATION_MISMATCH = "CONFIRMATION_MISMATCH"
+    PICTURE_NOT_FOUND = "PICTURE_NOT_FOUND"
+    INVALID_PICTURE = "INVALID_PICTURE"
+    PICTURE_TOO_LARGE = "PICTURE_TOO_LARGE"
+    TOO_MANY_PICTURES = "TOO_MANY_PICTURES"
+    DUPLICATE_PICTURE = "DUPLICATE_PICTURE"
+    PICTURES_NOT_CONFIGURED = "PICTURES_NOT_CONFIGURED"
+    PICTURE_STORAGE_UNAVAILABLE = "PICTURE_STORAGE_UNAVAILABLE"
     INTERNAL_ERROR = "INTERNAL_ERROR"
 
 
@@ -224,3 +231,70 @@ class ConfirmationMismatchError(DomainException):
         super().__init__(
             f"To delete, repeat the slug: ?confirm={expected}", details={"expected": expected}
         )
+
+
+class PictureNotFoundError(DomainException):
+    status_code = status.HTTP_404_NOT_FOUND
+    error_code = ErrorCode.PICTURE_NOT_FOUND
+    error_type = ErrorType.NOT_FOUND
+
+    def __init__(self, picture_id: int) -> None:
+        super().__init__(f"Picture {picture_id} not found", details={"picture_id": picture_id})
+
+
+class InvalidPictureError(DomainException):
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+    error_code = ErrorCode.INVALID_PICTURE
+    error_type = ErrorType.VALIDATION
+
+
+class PictureTooLargeError(DomainException):
+    status_code = status.HTTP_413_CONTENT_TOO_LARGE
+    error_code = ErrorCode.PICTURE_TOO_LARGE
+    error_type = ErrorType.VALIDATION
+
+    def __init__(self, max_bytes: int) -> None:
+        super().__init__(
+            f"The file is larger than {max_bytes // (1024 * 1024)} MB; shrink it before uploading",
+            details={"max_bytes": max_bytes},
+        )
+
+
+class TooManyPicturesError(DomainException):
+    status_code = status.HTTP_409_CONFLICT
+    error_code = ErrorCode.TOO_MANY_PICTURES
+    error_type = ErrorType.CONFLICT
+
+    def __init__(self, limit: int) -> None:
+        super().__init__(
+            f"A hall can have at most {limit} pictures; delete one first", details={"limit": limit}
+        )
+
+
+class DuplicatePictureError(DomainException):
+    status_code = status.HTTP_409_CONFLICT
+    error_code = ErrorCode.DUPLICATE_PICTURE
+    error_type = ErrorType.CONFLICT
+
+    def __init__(self, picture_id: int) -> None:
+        super().__init__(
+            "This picture was already uploaded", details={"existing_picture_id": picture_id}
+        )
+
+
+class PicturesNotConfiguredError(DomainException):
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    error_code = ErrorCode.PICTURES_NOT_CONFIGURED
+    error_type = ErrorType.UNAVAILABLE
+
+    def __init__(self, missing: str) -> None:
+        super().__init__(f"Pictures are not configured ({missing} is not set)")
+
+
+class PictureStorageUnavailableError(DomainException):
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    error_code = ErrorCode.PICTURE_STORAGE_UNAVAILABLE
+    error_type = ErrorType.UNAVAILABLE
+
+    def __init__(self) -> None:
+        super().__init__("Picture storage is unavailable; try again later")
