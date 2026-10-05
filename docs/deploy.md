@@ -25,7 +25,7 @@ Vercel environment variables (Project → Settings → Environment Variables):
 | `ADMIN_API_KEY_HASH` | hash of the production admin key | hash of the dev admin key |
 | `CORS_ORIGINS` | the website origin(s), once it exists | — |
 | `SENTRY_DSN` | Sentry project DSN (see [monitoring.md](monitoring.md)) | — |
-| `BLOB_READ_WRITE_TOKEN` | set by Vercel: store `backstageil-pictures` | set by Vercel: store `backstageil-pictures-dev` |
+| `BLOB_READ_WRITE_TOKEN` (sensitive) | read-write token of store `backstageil-pictures` | read-write token of store `backstageil-pictures-dev` |
 
 GitHub (`BackstageIL/backstageil-api`):
 
@@ -49,10 +49,14 @@ usage emails. Two stores keep dev/preview uploads out of production:
 
 1. Vercel → Storage → Create → Blob: `backstageil-pictures` and `backstageil-pictures-dev`,
    access **public**, region Frankfurt (`fra1`, next to the API).
-2. Connect each store to the `backstageil-api` project: `backstageil-pictures` for
-   **Production**, `backstageil-pictures-dev` for **Preview** and **Development**. Vercel then
-   sets `BLOB_READ_WRITE_TOKEN` itself; the API derives the public file URL from it.
-3. Local: copy the dev store's `BLOB_READ_WRITE_TOKEN` into `.env` (store → `.env.local` tab).
+2. Copy each store's **read-write token** (`vercel_blob_rw_...`, in the store's `.env.local` /
+   Quickstart snippet) into project Settings → Environment Variables as `BLOB_READ_WRITE_TOKEN`,
+   marked Sensitive: the `backstageil-pictures` token for **Production**, the
+   `backstageil-pictures-dev` token for **Preview**. The API derives the public file URL from it.
+   Connecting a store to the project is optional: Vercel then only adds `BLOB_STORE_ID` and an
+   OIDC login used by its own SDK, which this API doesn't use (possible later improvement: OIDC
+   instead of the long-lived token).
+3. Local: the dev store's token goes into `.env` as `BLOB_READ_WRITE_TOKEN`.
 
 Files are WebP, immutable (the key contains a content hash) and stored with a one-year cache
 lifetime, so most views are CDN cache hits that don't count as Blob reads. Uploads go through the
