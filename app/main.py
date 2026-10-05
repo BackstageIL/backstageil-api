@@ -50,6 +50,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = settings
     app.state.database = None
+    app.state.picture_storage = None  # created on first use (BSIL-24)
     app.state.admin_limiter = FailedAttemptLimiter(
         settings.admin_max_failed_attempts, settings.admin_failed_window_seconds
     )

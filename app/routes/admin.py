@@ -2,7 +2,18 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Body, Depends, Path, Query, Response, status
+from fastapi import (
+    APIRouter,
+    Body,
+    Depends,
+    File,
+    Form,
+    Path,
+    Query,
+    Response,
+    UploadFile,
+    status,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cache import no_store
@@ -21,8 +32,15 @@ from app.schemas.admin import (
     VenuePatch,
 )
 from app.schemas.health import HealthResponse
-from app.schemas.venue_import import SLUG_PATTERN, VenueImportItem
-from app.services import admin_venues, venues
+from app.schemas.pictures import AdminPicture, PicturePatch
+from app.schemas.venue_import import SLUG_PATTERN, SafeText, VenueImportItem
+from app.services import admin_venues, pictures, venues
+from app.services.picture_storage import (
+    PictureStorage,
+    delete_files_quietly,
+    get_optional_picture_storage,
+    get_picture_storage,
+)
 from app.services.venue_import import import_items
 
 router = APIRouter(
@@ -34,6 +52,10 @@ router = APIRouter(
 Session = Annotated[AsyncSession, Depends(get_session)]
 VenueSlug = Annotated[str, Path(pattern=SLUG_PATTERN, max_length=150)]
 HallSlug = Annotated[str, Path(pattern=SLUG_PATTERN, max_length=80)]
+PictureId = Annotated[int, Path(ge=1)]
+Storage = Annotated[PictureStorage, Depends(get_picture_storage)]
+OptionalStorage = Annotated[PictureStorage | None, Depends(get_optional_picture_storage)]
+PicturesBaseUrl = Annotated[str | None, Depends(pictures.get_pictures_base_url)]
 Confirm = Annotated[str | None, Query(description="Repeat the slug to confirm the deletion")]
 MAX_IMPORT_ITEMS = 200
 
@@ -187,6 +209,85 @@ async def unpublish_hall(
     return state
 
 
+# --- Pictures ----------------------------------------------------------------------------------
+
+PICTURES = "/venues/{venue_slug}/halls/{hall_slug}/pictures"
+
+
+@router.get(PICTURES, summary="Hall pictures (admin view)")
+async def list_pictures(
+    session: Session, base_url: PicturesBaseUrl, venue_slug: VenueSlug, hall_slug: HallSlug
+) -> list[AdminPicture]:
+    return await pictures.list_pictures(
+        session,
+        venue_slug,
+        hall_slug,
+        base_url=base_url,
+        published_only=False,
+        model=AdminPicture,
+    )
+
+
+@router.post(
+    PICTURES,
+    status_code=status.HTTP_201_CREATED,
+    summary="Upload a hall picture",
+    description="Multipart upload of one JPEG, PNG or WebP file (max 4 MB). It is turned upright, "
+    "stripped of all metadata (EXIF, GPS) and stored as WebP in a large and a thumbnail size. "
+    f"Up to {pictures.MAX_PICTURES_PER_HALL} pictures per hall; new pictures go last.",
+)
+async def upload_picture(
+    session: Session,
+    storage: Storage,
+    base_url: PicturesBaseUrl,
+    venue_slug: VenueSlug,
+    hall_slug: HallSlug,
+    file: Annotated[UploadFile, File(description="JPEG, PNG or WebP, max 4 MB")],
+    caption: Annotated[SafeText | None, Form(max_length=300)] = None,
+) -> AdminPicture:
+    pictures.require_base_url(base_url)
+    data = await file.read(pictures.MAX_UPLOAD_BYTES + 1)  # one byte more detects a larger file
+    picture = await pictures.add_picture(session, storage, venue_slug, hall_slug, data, caption)
+    await session.commit()
+    return pictures.to_model(picture, base_url, AdminPicture)
+
+
+@router.patch(
+    PICTURES + "/{picture_id}",
+    summary="Edit a picture's caption or display order",
+    description="Only the fields sent are changed; caption null clears it.",
+)
+async def patch_picture(
+    session: Session,
+    base_url: PicturesBaseUrl,
+    venue_slug: VenueSlug,
+    hall_slug: HallSlug,
+    picture_id: PictureId,
+    patch: PicturePatch,
+) -> AdminPicture:
+    picture = await pictures.patch_picture(session, venue_slug, hall_slug, picture_id, patch)
+    await session.commit()
+    return pictures.to_model(picture, base_url, AdminPicture)
+
+
+@router.delete(
+    PICTURES + "/{picture_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a picture permanently (row and files)",
+)
+async def delete_picture(
+    session: Session,
+    storage: Storage,
+    venue_slug: VenueSlug,
+    hall_slug: HallSlug,
+    picture_id: PictureId,
+) -> Response:
+    picture_files = await pictures.delete_picture(session, venue_slug, hall_slug, picture_id)
+    await session.commit()
+    await delete_files_quietly(storage, picture_files)
+    return Response(status_code=status.HTTP_204_NO_CONTENT, headers={"Cache-Control": "no-store"})
+
+
 # --- Delete --------------------------------------------------------------------------------------
 
 
@@ -194,14 +295,16 @@ async def unpublish_hall(
     "/venues/{venue_slug}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete a venue permanently",
-    description="Also deletes its halls, pictures and recommendations. "
+    description="Also deletes its halls, pictures (rows and files) and recommendations. "
     "Requires ?confirm=<venue_slug>.",
 )
 async def delete_venue(
-    session: Session, venue_slug: VenueSlug, confirm: Confirm = None
+    session: Session, storage: OptionalStorage, venue_slug: VenueSlug, confirm: Confirm = None
 ) -> Response:
+    picture_files = await pictures.file_keys_of(session, venue_slug)
     await admin_venues.delete_venue(session, venue_slug, confirm)
     await session.commit()
+    await delete_files_quietly(storage, picture_files)
     return Response(status_code=status.HTTP_204_NO_CONTENT, headers={"Cache-Control": "no-store"})
 
 
@@ -212,8 +315,14 @@ async def delete_venue(
     description="Requires ?confirm=<hall_slug>.",
 )
 async def delete_hall(
-    session: Session, venue_slug: VenueSlug, hall_slug: HallSlug, confirm: Confirm = None
+    session: Session,
+    storage: OptionalStorage,
+    venue_slug: VenueSlug,
+    hall_slug: HallSlug,
+    confirm: Confirm = None,
 ) -> Response:
+    picture_files = await pictures.file_keys_of(session, venue_slug, hall_slug)
     await admin_venues.delete_hall(session, venue_slug, hall_slug, confirm)
     await session.commit()
+    await delete_files_quietly(storage, picture_files)
     return Response(status_code=status.HTTP_204_NO_CONTENT, headers={"Cache-Control": "no-store"})

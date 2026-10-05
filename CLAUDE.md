@@ -21,7 +21,8 @@ uv run alembic revision --autogenerate -m "..."  # new migration after model cha
 - `app/core/` config (pydantic-settings), JSON logging, exceptions
 - `app/db/` engine/session (`Database`), ORM `Base`, FastAPI dependencies
 - `app/routes/` one `router` per domain; versioned routers go into `api_router` (`/api/v1`)
-  - public read API: `/api/v1/venues`, `/venues/{slug}`, `/venues/{slug}/halls/{slug}`, `/cities`
+  - public read API: `/api/v1/venues`, `/venues/{slug}`, `/venues/{slug}/halls/{slug}`,
+    `/venues/{slug}/halls/{slug}/pictures`, `/cities`
     (published rows only; `public_cache` dependency sets Cache-Control on 200s)
 - `app/schemas/` Pydantic request/response models
 - `app/services/` business logic; raises `DomainException` subclasses, never `HTTPException`
@@ -34,6 +35,9 @@ uv run alembic revision --autogenerate -m "..."  # new migration after model cha
   halls have is a column. Content is neutral facts, no opinions or tour remarks.
 - Relationships are `lazy="raise"`: load related rows explicitly (`selectinload`) in services.
 - Never store people's names/phones or passwords from source data.
+- Picture files live in a public Vercel Blob store behind `PictureStorage`
+  (`services/picture_storage.py`); uploads are re-encoded to WebP without metadata; rows store
+  keys only and URLs are built from the store's base URL.
 - Admin-only routes go under `app/routes/admin.py` (router-level `require_admin`); never put the
   admin key itself anywhere, only its hash in ADMIN_API_KEY_HASH.
 - Admin writes commit explicitly (`get_session` never commits); bulk import runs in a savepoint

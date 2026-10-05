@@ -3,7 +3,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import Field, HttpUrl, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -36,7 +36,20 @@ class Settings(BaseSettings):
     # Sentry project DSN for error tracking (BSIL-28). Unset = no error reports are sent.
     sentry_dsn: SecretStr | None = None
 
-    @field_validator("database_url", "admin_api_key_hash", "sentry_dsn", mode="before")
+    # Vercel Blob store for hall pictures (BSIL-24); Vercel sets it when the store is connected
+    # to the project. Unset = uploads disabled.
+    blob_read_write_token: SecretStr | None = None
+    # Optional override of the public base URL of picture files (default: the store's own URL)
+    pictures_base_url: HttpUrl | None = None
+
+    @field_validator(
+        "database_url",
+        "admin_api_key_hash",
+        "sentry_dsn",
+        "blob_read_write_token",
+        "pictures_base_url",
+        mode="before",
+    )
     @classmethod
     def empty_value_is_unset(cls, value: object) -> object:
         # `DATABASE_URL=` (as in .env.example) means "not set", not an empty value.

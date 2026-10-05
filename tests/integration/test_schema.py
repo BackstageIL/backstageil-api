@@ -133,7 +133,7 @@ async def test_deleting_a_venue_cascades(session: AsyncSession) -> None:
     await session.flush()
     session.add_all(
         [
-            HallPicture(hall_id=hall.id, storage_key="test/halls/main/01.webp"),
+            HallPicture(hall_id=hall.id, storage_key="test/halls/main/01", width=1600, height=900),
             Recommendation(
                 venue_id=venue.id, category=RecommendationCategory.FOOD, name="Test Falafel"
             ),
