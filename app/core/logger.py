@@ -26,6 +26,10 @@ def configure_logging(level: str = "INFO") -> None:
     root = logging.getLogger()
     root.handlers[:] = [handler]
     root.setLevel(level)
+    # The HTTP client logs every request with its full URL at INFO; some URLs are secrets (the
+    # website deploy hook), so only its warnings get through (also keeps them out of Sentry).
+    for name in ("httpx2", "httpcore"):
+        logging.getLogger(name).setLevel(logging.WARNING)
 
 
 def get_logger(name: str) -> logging.Logger:

@@ -42,12 +42,17 @@ class Settings(BaseSettings):
     # Optional override of the public base URL of picture files (default: the store's own URL)
     pictures_base_url: HttpUrl | None = None
 
+    # Vercel deploy hook of the website (BSIL-46): called after admin writes so the site is
+    # rebuilt from fresh data. A secret (anyone with it can trigger builds). Unset = no rebuilds.
+    site_deploy_hook_url: SecretStr | None = None
+
     @field_validator(
         "database_url",
         "admin_api_key_hash",
         "sentry_dsn",
         "blob_read_write_token",
         "pictures_base_url",
+        "site_deploy_hook_url",
         mode="before",
     )
     @classmethod

@@ -1,7 +1,7 @@
 """Admin API models: import report, partial edits, publish state and admin views."""
 
 from datetime import date
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, PositiveInt, model_validator
 
@@ -49,6 +49,10 @@ class HallPatch(HallTechnicalFields):
     def texts_have_no_contact_details(self) -> Self:
         check_hall_texts(self, self.field_notes, self.extras)
         return self
+
+
+class SiteRebuildState(BaseModel):
+    status: Literal["triggered"] = "triggered"
 
 
 class PublishState(BaseModel):
