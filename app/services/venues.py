@@ -75,6 +75,7 @@ async def list_venues[S: VenueSummary](
         model(
             slug=venue.slug,
             name=venue.name,
+            name_he=venue.name_he,
             venue_type=venue.venue_type,
             street_address=venue.street_address,
             city=CityRef.model_validate(city),
@@ -133,6 +134,7 @@ async def get_venue[D: VenueDetail](
     return model(
         slug=venue.slug,
         name=venue.name,
+        name_he=venue.name_he,
         venue_type=venue.venue_type,
         street_address=venue.street_address,
         website=venue.website,
@@ -159,6 +161,7 @@ async def hall_document[H: HallDocument](session: AsyncSession, hall: Hall, *, m
     venue_ref = VenueRef(
         slug=venue.slug,
         name=venue.name,
+        name_he=venue.name_he,
         street_address=venue.street_address,
         city=await _city_ref(session, venue.city_id),
     )
@@ -178,7 +181,11 @@ async def list_cities_with_venues(session: AsyncSession) -> list[CityWithCount]:
     )
     return [
         CityWithCount(
-            slug=city.slug, name_en=city.name_en, district=city.district, venue_count=count
+            slug=city.slug,
+            name_en=city.name_en,
+            name_he=city.name_he,
+            district=city.district,
+            venue_count=count,
         )
         for city, count in rows
     ]

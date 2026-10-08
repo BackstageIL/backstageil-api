@@ -52,6 +52,7 @@ class Venue(TimestampMixin, Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     slug: Mapped[str] = mapped_column(String(150), unique=True)
     name: Mapped[str] = mapped_column(String(150))
+    name_he: Mapped[str | None] = mapped_column(String(150))  # Hebrew name (BSIL-48)
     city_id: Mapped[int] = mapped_column(ForeignKey("cities.id", ondelete="RESTRICT"))
     street_address: Mapped[str | None] = mapped_column(String(200))
     latitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6))

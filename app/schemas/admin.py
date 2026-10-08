@@ -27,6 +27,7 @@ class VenuePatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: SafeText | None = Field(default=None, min_length=2, max_length=150)
+    name_he: SafeText | None = Field(default=None, min_length=2, max_length=150)
     street_address: SafeText | None = Field(default=None, max_length=200)
     venue_type: VenueType | None = None
     website: HttpUrl | None = None
@@ -40,6 +41,7 @@ class HallPatch(HallTechnicalFields):
     model_config = ConfigDict(extra="forbid")
 
     name: SafeText | None = Field(default=None, min_length=2, max_length=150)
+    name_he: SafeText | None = Field(default=None, min_length=2, max_length=150)
     field_notes: HallFieldNotes | None = None
     extras: HallExtras | None = None
     source: SafeText | None = Field(default=None, max_length=200)

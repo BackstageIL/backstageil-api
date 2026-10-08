@@ -89,6 +89,7 @@ class Hall(TimestampMixin, Base):
     venue_id: Mapped[int] = mapped_column(ForeignKey("venues.id", ondelete="CASCADE"))
     slug: Mapped[str] = mapped_column(String(80))
     name: Mapped[str] = mapped_column(String(150))
+    name_he: Mapped[str | None] = mapped_column(String(150))  # Hebrew name (BSIL-48)
 
     # Sections follow a venue technical document. Every fixed column may carry a short
     # factual note in `field_notes`.

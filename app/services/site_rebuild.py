@@ -65,8 +65,12 @@ def rebuilder_from_settings(settings: Settings) -> SiteRebuilder | None:
     return SiteRebuilder(url)
 
 
+SKIP_HEADER = "X-Site-Rebuild"  # "skip": bulk scripts rebuild once at the end instead
+
+
 def changes_site_data(request: Request, response: Response) -> bool:
-    """A successful admin write, other than a dry run or the manual rebuild itself."""
+    """A successful admin write, other than a dry run, the manual rebuild itself, or a request
+    that asks to skip it (`X-Site-Rebuild: skip`)."""
     path = request.url.path
     return (
         path.startswith(f"{ADMIN_PREFIX}/")
@@ -74,6 +78,7 @@ def changes_site_data(request: Request, response: Response) -> bool:
         and request.method in _WRITE_METHODS
         and 200 <= response.status_code < 300
         and request.query_params.get("dry_run", "").lower() not in _TRUE
+        and request.headers.get(SKIP_HEADER, "").lower() != "skip"
     )
 
 

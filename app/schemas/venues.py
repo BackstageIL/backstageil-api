@@ -16,6 +16,7 @@ class _FromRow(BaseModel):
 class CityRef(_FromRow):
     slug: str
     name_en: str
+    name_he: str
     district: District | None
 
 
@@ -26,6 +27,7 @@ class CityWithCount(CityRef):
 class VenueSummary(_FromRow):
     slug: str
     name: str
+    name_he: str | None
     venue_type: VenueType
     street_address: str | None
     city: CityRef
@@ -42,6 +44,7 @@ class VenuePage(BaseModel):
 class HallSummary(_FromRow):
     slug: str
     name: str
+    name_he: str | None
     capacity_seated: int | None
     stage_width_m: Meters | None
     stage_depth_m: Meters | None
@@ -50,6 +53,7 @@ class HallSummary(_FromRow):
 class VenueDetail(_FromRow):
     slug: str
     name: str
+    name_he: str | None
     venue_type: VenueType
     street_address: str | None
     website: str | None
@@ -60,6 +64,7 @@ class VenueDetail(_FromRow):
 class VenueRef(_FromRow):
     slug: str
     name: str
+    name_he: str | None
     street_address: str | None
     city: CityRef
 
@@ -71,6 +76,7 @@ class HallDocument(HallTechnicalFields):
 
     slug: str
     name: str
+    name_he: str | None
     venue: VenueRef
     field_notes: dict[str, str]
     extras: dict[str, Any]
