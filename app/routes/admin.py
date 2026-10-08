@@ -11,6 +11,7 @@ from fastapi import (
     Form,
     Path,
     Query,
+    Request,
     Response,
     UploadFile,
     status,
@@ -18,6 +19,7 @@ from fastapi import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cache import no_store
+from app.core.exceptions import SiteRebuildNotConfiguredError
 from app.core.security import require_admin
 from app.db.dependencies import get_session
 from app.db.models import District, RecommendationCategory, VenueType
@@ -30,6 +32,7 @@ from app.schemas.admin import (
     HallPatch,
     ImportReport,
     PublishState,
+    SiteRebuildState,
     VenuePatch,
 )
 from app.schemas.health import HealthResponse
@@ -75,6 +78,21 @@ MAX_IMPORT_ITEMS = 200
 )
 async def ping() -> HealthResponse:
     return HealthResponse()
+
+
+@router.post(
+    "/site/rebuild",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Rebuild the website now",
+    description="The website is also rebuilt automatically after every successful admin change; "
+    "use this to force a rebuild. The new site is live about 1-2 minutes later.",
+)
+async def rebuild_site(request: Request) -> SiteRebuildState:
+    rebuilder = request.app.state.site_rebuilder
+    if rebuilder is None:
+        raise SiteRebuildNotConfiguredError()
+    await rebuilder.trigger()
+    return SiteRebuildState()
 
 
 # --- Bulk upload -------------------------------------------------------------------------------

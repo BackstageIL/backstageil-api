@@ -40,6 +40,8 @@ uv run alembic revision --autogenerate -m "..."  # new migration after model cha
   keys only and URLs are built from the store's base URL.
 - Admin-only routes go under `app/routes/admin.py` (router-level `require_admin`); never put the
   admin key itself anywhere, only its hash in ADMIN_API_KEY_HASH.
+- Successful admin writes trigger a website rebuild (`services/site_rebuild.py` middleware,
+  Vercel deploy hook `SITE_DEPLOY_HOOK_URL`, best effort; the hook URL is never logged).
 - Admin writes commit explicitly (`get_session` never commits); bulk import runs in a savepoint
   (all-or-nothing, dry-run = rolled-back savepoint). Public queries pass `published_only=True`.
 - Schema changes only via Alembic migrations (`migrations/versions/`), backward-compatible for blue-green

@@ -39,6 +39,8 @@ class ErrorCode(StrEnum):
     DUPLICATE_PICTURE = "DUPLICATE_PICTURE"
     PICTURES_NOT_CONFIGURED = "PICTURES_NOT_CONFIGURED"
     PICTURE_STORAGE_UNAVAILABLE = "PICTURE_STORAGE_UNAVAILABLE"
+    SITE_REBUILD_NOT_CONFIGURED = "SITE_REBUILD_NOT_CONFIGURED"
+    SITE_REBUILD_FAILED = "SITE_REBUILD_FAILED"
     INTERNAL_ERROR = "INTERNAL_ERROR"
 
 
@@ -311,3 +313,21 @@ class PictureStorageUnavailableError(DomainException):
 
     def __init__(self) -> None:
         super().__init__("Picture storage is unavailable; try again later")
+
+
+class SiteRebuildNotConfiguredError(DomainException):
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    error_code = ErrorCode.SITE_REBUILD_NOT_CONFIGURED
+    error_type = ErrorType.UNAVAILABLE
+
+    def __init__(self) -> None:
+        super().__init__("Website rebuilds are not configured (SITE_DEPLOY_HOOK_URL is not set)")
+
+
+class SiteRebuildFailedError(DomainException):
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    error_code = ErrorCode.SITE_REBUILD_FAILED
+    error_type = ErrorType.UNAVAILABLE
+
+    def __init__(self) -> None:
+        super().__init__("The website rebuild could not be started; try again later")

@@ -26,6 +26,7 @@ Vercel environment variables (Project → Settings → Environment Variables):
 | `CORS_ORIGINS` | the website origin(s), once it exists | — |
 | `SENTRY_DSN` | Sentry project DSN (see [monitoring.md](monitoring.md)) | — |
 | `BLOB_READ_WRITE_TOKEN` (sensitive) | read-write token of store `backstageil-pictures` | read-write token of store `backstageil-pictures-dev` |
+| `SITE_DEPLOY_HOOK_URL` (sensitive) | deploy hook of the `backstageil-web` project (main) | — (previews never rebuild the site) |
 
 GitHub (`BackstageIL/backstageil-api`):
 
@@ -62,6 +63,19 @@ Files are WebP, immutable (the key contains a content hash) and stored with a on
 lifetime, so most views are CDN cache hits that don't count as Blob reads. Uploads go through the
 API, so a file can be at most 4 MB (Vercel's 4.5 MB request limit). Set `PICTURES_BASE_URL` only
 to serve files from another domain later; rows store keys, never full URLs.
+
+## Website rebuilds
+
+The website (`backstageil-web`) is built from this API at build time. After every successful
+admin write (POST/PATCH/DELETE under `/api/v1/admin`, except import dry runs) the API calls the
+website's Vercel deploy hook (`SITE_DEPLOY_HOOK_URL`), best effort: a failed call is logged and
+the admin change is still saved. `POST /api/v1/admin/site/rebuild` forces a rebuild.
+
+- Hook: Vercel → project `backstageil-web` → Settings → Git → Deploy Hooks, branch `main`.
+  Anyone with the URL can start builds: keep it in Vercel env vars only, never in files or logs
+  (the API never logs it; HTTP client request logs are turned off for this reason).
+- Vercel cancels superseded hook builds, so quick successive edits end in one live build.
+  Hobby limits: 60 hook triggers per hour, 100 deployments per day for the whole account.
 
 ## Release flow (blue-green)
 
