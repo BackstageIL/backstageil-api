@@ -22,7 +22,7 @@ uv run alembic revision --autogenerate -m "..."  # new migration after model cha
 - `app/db/` engine/session (`Database`), ORM `Base`, FastAPI dependencies
 - `app/routes/` one `router` per domain; versioned routers go into `api_router` (`/api/v1`)
   - public read API: `/api/v1/venues`, `/venues/{slug}`, `/venues/{slug}/halls/{slug}`,
-    `/venues/{slug}/halls/{slug}/pictures`, `/cities`
+    `/venues/{slug}/halls/{slug}/pictures`, `/venues/{slug}/recommendations`, `/cities`
     (published rows only; `public_cache` dependency sets Cache-Control on 200s)
 - `app/schemas/` Pydantic request/response models
 - `app/services/` business logic; raises `DomainException` subclasses, never `HTTPException`

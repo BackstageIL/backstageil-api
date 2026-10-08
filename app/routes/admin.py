@@ -1,5 +1,6 @@
 """Admin-only routes. Every route here requires the admin API key (X-API-Key)."""
 
+from datetime import date
 from typing import Annotated
 
 from fastapi import (
@@ -19,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.cache import no_store
 from app.core.security import require_admin
 from app.db.dependencies import get_session
-from app.db.models import District, VenueType
+from app.db.models import District, RecommendationCategory, VenueType
 from app.schemas.admin import (
     AdminHallDocument,
     AdminHallSummary,
@@ -33,8 +34,13 @@ from app.schemas.admin import (
 )
 from app.schemas.health import HealthResponse
 from app.schemas.pictures import AdminPicture, PicturePatch
+from app.schemas.recommendations import (
+    AdminRecommendation,
+    RecommendationCreate,
+    RecommendationPatch,
+)
 from app.schemas.venue_import import SLUG_PATTERN, SafeText, VenueImportItem
-from app.services import admin_venues, pictures, venues
+from app.services import admin_venues, pictures, recommendations, venues
 from app.services.picture_storage import (
     PictureStorage,
     delete_files_quietly,
@@ -53,6 +59,8 @@ Session = Annotated[AsyncSession, Depends(get_session)]
 VenueSlug = Annotated[str, Path(pattern=SLUG_PATTERN, max_length=150)]
 HallSlug = Annotated[str, Path(pattern=SLUG_PATTERN, max_length=80)]
 PictureId = Annotated[int, Path(ge=1)]
+RecommendationId = Annotated[int, Path(ge=1)]
+Today = Annotated[date, Depends(recommendations.israel_today)]
 Storage = Annotated[PictureStorage, Depends(get_picture_storage)]
 OptionalStorage = Annotated[PictureStorage | None, Depends(get_optional_picture_storage)]
 PicturesBaseUrl = Annotated[str | None, Depends(pictures.get_pictures_base_url)]
@@ -285,6 +293,71 @@ async def delete_picture(
     picture_files = await pictures.delete_picture(session, venue_slug, hall_slug, picture_id)
     await session.commit()
     await delete_files_quietly(storage, picture_files)
+    return Response(status_code=status.HTTP_204_NO_CONTENT, headers={"Cache-Control": "no-store"})
+
+
+# --- Recommendations ---------------------------------------------------------------------------
+
+RECOMMENDATIONS = "/venues/{venue_slug}/recommendations"
+
+
+@router.get(RECOMMENDATIONS, summary="Venue recommendations (including inactive)")
+async def list_recommendations(
+    session: Session,
+    today: Today,
+    venue_slug: VenueSlug,
+    category: RecommendationCategory | None = None,
+) -> list[AdminRecommendation]:
+    rows = await recommendations.list_recommendations(
+        session, venue_slug, today=today, category=category, public=False
+    )
+    return [recommendations.admin_view(row, today) for row in rows]
+
+
+@router.post(
+    RECOMMENDATIONS,
+    status_code=status.HTTP_201_CREATED,
+    summary="Add a recommendation",
+    description="`phone` is the place's business phone; names, addresses and notes may not hold "
+    "phone numbers or emails. A sponsorship runs while is_sponsored is set, until the end of "
+    "sponsored_until (Israel time; empty = no end).",
+)
+async def create_recommendation(
+    session: Session, today: Today, venue_slug: VenueSlug, data: RecommendationCreate
+) -> AdminRecommendation:
+    row = await recommendations.create_recommendation(session, venue_slug, data)
+    await session.commit()
+    return recommendations.admin_view(row, today)
+
+
+@router.patch(
+    RECOMMENDATIONS + "/{recommendation_id}",
+    summary="Edit a recommendation",
+    description="Only the fields sent are changed; null clears an optional field. "
+    "is_active=false hides it from the public list without deleting it.",
+)
+async def patch_recommendation(
+    session: Session,
+    today: Today,
+    venue_slug: VenueSlug,
+    recommendation_id: RecommendationId,
+    patch: RecommendationPatch,
+) -> AdminRecommendation:
+    row = await recommendations.patch_recommendation(session, venue_slug, recommendation_id, patch)
+    await session.commit()
+    return recommendations.admin_view(row, today)
+
+
+@router.delete(
+    RECOMMENDATIONS + "/{recommendation_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a recommendation permanently",
+)
+async def delete_recommendation(
+    session: Session, venue_slug: VenueSlug, recommendation_id: RecommendationId
+) -> Response:
+    await recommendations.delete_recommendation(session, venue_slug, recommendation_id)
+    await session.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT, headers={"Cache-Control": "no-store"})
 
 
