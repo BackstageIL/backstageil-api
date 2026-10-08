@@ -365,3 +365,58 @@ async def test_delete_hall_keeps_the_venue(client: httpx2.AsyncClient, city: Cit
     assert response.status_code == 204
     venue = (await client.get(f"{ADMIN}/venues/zqa-venue", headers=AUTH)).json()
     assert venue["halls"] == []
+
+
+# --- Hebrew names (BSIL-48) ---------------------------------------------------------------------
+
+
+async def test_hebrew_names_round_trip_and_survive_english_reimport(
+    client: httpx2.AsyncClient, city: City
+) -> None:
+    named = item()
+    named["venue"]["name_he"] = 'זק"א מקום'
+    named["hall"]["name_he"] = "אולם ראשי"
+    await import_(client, [named])
+
+    hall = (await client.get(f"{PUBLIC}/venues/zqa-venue/halls/main")).json()
+    assert hall["name_he"] == "אולם ראשי"
+    assert hall["venue"]["name_he"] == 'זק"א מקום'
+    assert hall["venue"]["city"]["name_he"] == "ע"
+
+    # An English-only re-import (no name_he) keeps the Hebrew names
+    await import_(client, [item(capacity_seated=600)])
+    venue = (await client.get(f"{PUBLIC}/venues/zqa-venue")).json()
+    assert venue["name_he"] == 'זק"א מקום'
+    assert venue["halls"][0]["name_he"] == "אולם ראשי"
+    assert venue["halls"][0]["capacity_seated"] == 600
+
+
+async def test_patch_hebrew_names(client: httpx2.AsyncClient, city: City) -> None:
+    await import_(client, [item()])
+
+    venue = await client.patch(
+        f"{ADMIN}/venues/zqa-venue", json={"name_he": "בית העם"}, headers=AUTH
+    )
+    hall = await client.patch(
+        f"{ADMIN}/venues/zqa-venue/halls/main", json={"name_he": "אולם גדול"}, headers=AUTH
+    )
+    cleared = await client.patch(f"{ADMIN}/venues/zqa-venue", json={"name_he": None}, headers=AUTH)
+
+    assert venue.json()["name_he"] == "בית העם"
+    assert hall.json()["name_he"] == "אולם גדול"
+    assert cleared.json()["name_he"] is None
+    listed = (await client.get(f"{PUBLIC}/venues", params={"q": "zqa"})).json()["items"][0]
+    assert listed["name_he"] is None
+
+
+@pytest.mark.parametrize("name_he", ["א", "טלפון 052-1234567"])
+async def test_invalid_hebrew_name_is_422(
+    client: httpx2.AsyncClient, city: City, name_he: str
+) -> None:
+    await import_(client, [item()])
+
+    response = await client.patch(
+        f"{ADMIN}/venues/zqa-venue", json={"name_he": name_he}, headers=AUTH
+    )
+
+    assert response.status_code == 422

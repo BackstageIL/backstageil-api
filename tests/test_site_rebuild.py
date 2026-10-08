@@ -144,14 +144,14 @@ def test_rebuilder_needs_the_setting() -> None:
 # --- which requests change the site -------------------------------------------------------------
 
 
-def request(method: str, path: str, query: str = "") -> Request:
+def request(method: str, path: str, query: str = "", skip: bool = False) -> Request:
     return Request(
         {
             "type": "http",
             "method": method,
             "path": path,
             "query_string": query.encode(),
-            "headers": [],
+            "headers": [(b"x-site-rebuild", b"skip")] if skip else [],
         }
     )
 
@@ -228,3 +228,10 @@ def test_failed_admin_write_does_not_rebuild() -> None:
 
     assert response.status_code == 503
     assert rebuilder.calls == 0
+
+
+def test_bulk_scripts_can_skip_the_rebuild() -> None:
+    ok = Response(status_code=200)
+
+    assert not changes_site_data(request("PATCH", "/api/v1/admin/venues/x", skip=True), ok)
+    assert changes_site_data(request("PATCH", "/api/v1/admin/venues/x"), ok)

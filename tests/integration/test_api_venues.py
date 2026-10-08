@@ -119,8 +119,10 @@ async def test_list_returns_only_published_venues_sorted_with_hall_counts(
     assert alpha["city"] == {
         "slug": "zqx-center-city",
         "name_en": "Zqx Center City",
+        "name_he": "א",
         "district": "center",
     }
+    assert alpha["name_he"] is None  # not filled yet
 
 
 async def test_search_is_case_insensitive(
@@ -171,6 +173,7 @@ async def test_venue_detail_lists_published_halls_only(
         {
             "slug": "main",
             "name": "Main hall",
+            "name_he": None,
             "capacity_seated": 800,
             "stage_width_m": 24.0,
             "stage_depth_m": 12.5,

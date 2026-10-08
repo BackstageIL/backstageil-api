@@ -34,7 +34,9 @@ async def import_venue(
     if city_id is None:
         raise UnknownCityError(item.venue.city_code)
 
-    venue_values = item.venue.model_dump(exclude={"city_code", "website"})
+    # A Hebrew name left out of the item keeps the one already stored (English-only re-imports)
+    keep_he = {"name_he"} if item.venue.name_he is None else set()
+    venue_values = item.venue.model_dump(exclude={"city_code", "website", *keep_he})
     venue_values |= {
         "city_id": city_id,
         "website": str(item.venue.website) if item.venue.website else None,
@@ -54,6 +56,8 @@ async def import_venue(
     ).one()
 
     hall_values = item.hall_values() | {"venue_id": venue_row.id, "is_published": publish}
+    if item.hall.name_he is None:
+        del hall_values["name_he"]
     hall_insert = insert(Hall).values(**hall_values)
     hall_row = (
         await session.execute(

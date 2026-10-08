@@ -45,6 +45,8 @@ class VenueImport(BaseModel):
 
     slug: str = Field(pattern=SLUG_PATTERN, max_length=150)
     name: SafeText = Field(min_length=2, max_length=150)
+    # Hebrew name; when left out, an existing Hebrew name is kept on re-import
+    name_he: SafeText | None = Field(default=None, min_length=2, max_length=150)
     city_code: PositiveInt  # official CBS locality code (cities.official_code)
     street_address: SafeText | None = Field(default=None, max_length=200)
     venue_type: VenueType
@@ -56,6 +58,8 @@ class HallImport(HallTechnicalFields):
 
     slug: str = Field(pattern=SLUG_PATTERN, max_length=80)
     name: SafeText = Field(min_length=2, max_length=150)
+    # Hebrew name; when left out, an existing Hebrew name is kept on re-import
+    name_he: SafeText | None = Field(default=None, min_length=2, max_length=150)
 
     extras: HallExtras = HallExtras({})
     field_notes: HallFieldNotes = HallFieldNotes({})

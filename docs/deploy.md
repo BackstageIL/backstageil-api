@@ -70,6 +70,8 @@ The website (`backstageil-web`) is built from this API at build time. After ever
 admin write (POST/PATCH/DELETE under `/api/v1/admin`, except import dry runs) the API calls the
 website's Vercel deploy hook (`SITE_DEPLOY_HOOK_URL`), best effort: a failed call is logged and
 the admin change is still saved. `POST /api/v1/admin/site/rebuild` forces a rebuild.
+Bulk scripts send `X-Site-Rebuild: skip` on each write and call the manual rebuild once at the
+end, instead of starting one build per request.
 
 - Hook: Vercel → project `backstageil-web` → Settings → Git → Deploy Hooks, branch `main`.
   Anyone with the URL can start builds: keep it in Vercel env vars only, never in files or logs
