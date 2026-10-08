@@ -38,18 +38,31 @@ class SiteRebuilder:
                 response = await client.post(self._hook_url)
                 response.raise_for_status()
         except httpx2.HTTPStatusError as exc:
-            logger.error("Site rebuild hook answered %s", exc.response.status_code)
-            raise SiteRebuildFailedError() from exc
-        except httpx2.HTTPError as exc:
-            logger.error("Site rebuild hook request failed: %s", exc.__class__.__name__)
-            raise SiteRebuildFailedError() from exc
+            reason = f"hook answered HTTP {exc.response.status_code}"
+            logger.error("Site rebuild failed: %s", reason)
+            raise SiteRebuildFailedError(reason) from exc
+        except (httpx2.HTTPError, httpx2.InvalidURL) as exc:
+            reason = f"hook request failed: {exc.__class__.__name__}"
+            logger.error("Site rebuild failed: %s", reason)
+            raise SiteRebuildFailedError(reason) from exc
         logger.info("Site rebuild triggered")
+
+
+def clean_hook_url(value: str) -> str | None:
+    """The hook URL without the spaces, newlines or quotes a dashboard paste can add.
+    None when what remains is not an https URL (reported as "not configured")."""
+    url = value.strip().strip("\"'").strip()
+    return url if url.startswith("https://") and not any(c.isspace() for c in url) else None
 
 
 def rebuilder_from_settings(settings: Settings) -> SiteRebuilder | None:
     if settings.site_deploy_hook_url is None:
         return None
-    return SiteRebuilder(settings.site_deploy_hook_url.get_secret_value())
+    url = clean_hook_url(settings.site_deploy_hook_url.get_secret_value())
+    if url is None:
+        logger.warning("SITE_DEPLOY_HOOK_URL is not an https URL; website rebuilds are off")
+        return None
+    return SiteRebuilder(url)
 
 
 def changes_site_data(request: Request, response: Response) -> bool:

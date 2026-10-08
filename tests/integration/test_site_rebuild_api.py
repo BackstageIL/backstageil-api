@@ -30,7 +30,7 @@ class CountingRebuilder:
     async def trigger(self) -> None:
         self.calls += 1
         if self.fail:
-            raise SiteRebuildFailedError()
+            raise SiteRebuildFailedError("hook answered HTTP 500")
 
 
 @pytest.fixture
