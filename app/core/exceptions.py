@@ -321,7 +321,10 @@ class SiteRebuildNotConfiguredError(DomainException):
     error_type = ErrorType.UNAVAILABLE
 
     def __init__(self) -> None:
-        super().__init__("Website rebuilds are not configured (SITE_DEPLOY_HOOK_URL is not set)")
+        super().__init__(
+            "Website rebuilds are not configured "
+            "(SITE_DEPLOY_HOOK_URL is not set or is not an https URL)"
+        )
 
 
 class SiteRebuildFailedError(DomainException):
@@ -329,5 +332,9 @@ class SiteRebuildFailedError(DomainException):
     error_code = ErrorCode.SITE_REBUILD_FAILED
     error_type = ErrorType.UNAVAILABLE
 
-    def __init__(self) -> None:
-        super().__init__("The website rebuild could not be started; try again later")
+    def __init__(self, reason: str) -> None:
+        # The reason is an HTTP status or an error type, never the (secret) hook URL
+        super().__init__(
+            "The website rebuild could not be started; try again later",
+            details={"reason": reason},
+        )

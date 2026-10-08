@@ -12,7 +12,12 @@ from app.core.config import Settings
 from app.core.exceptions import SiteRebuildFailedError
 from app.core.security import hash_api_key
 from app.main import create_app
-from app.services.site_rebuild import SiteRebuilder, changes_site_data, rebuilder_from_settings
+from app.services.site_rebuild import (
+    SiteRebuilder,
+    changes_site_data,
+    clean_hook_url,
+    rebuilder_from_settings,
+)
 
 pytestmark = pytest.mark.anyio
 
@@ -34,7 +39,7 @@ class FakeRebuilder:
     async def trigger(self) -> None:
         self.calls += 1
         if self.fail:
-            raise SiteRebuildFailedError()
+            raise SiteRebuildFailedError("hook answered HTTP 500")
 
 
 def admin_client(rebuilder: FakeRebuilder | None) -> TestClient:
@@ -91,11 +96,49 @@ async def test_network_failure_fails_without_logging_the_hook(
     assert "s3cretHookId" not in caplog.text
 
 
+async def test_failure_reason_never_contains_the_hook() -> None:
+    answer_404 = httpx2.MockTransport(lambda r: httpx2.Response(404))
+    with pytest.raises(SiteRebuildFailedError) as caught:
+        await SiteRebuilder(HOOK, transport=answer_404).trigger()
+
+    assert caught.value.details == {"reason": "hook answered HTTP 404"}
+    assert "s3cretHookId" not in str(caught.value.details)
+
+
+async def test_malformed_url_is_a_failure_not_a_crash() -> None:
+    ok = httpx2.MockTransport(lambda r: httpx2.Response(200))
+
+    with pytest.raises(SiteRebuildFailedError) as caught:
+        await SiteRebuilder(f"{HOOK}\n", transport=ok).trigger()
+
+    assert caught.value.details == {"reason": "hook request failed: InvalidURL"}
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (HOOK, HOOK),
+        (f"  {HOOK}  ", HOOK),
+        (f"{HOOK}\n", HOOK),
+        (f'"{HOOK}"', HOOK),
+        (f"'{HOOK}'\n", HOOK),
+        ("http://api.vercel.com/v1/integrations/deploy/x", None),
+        ("api.vercel.com/v1/integrations/deploy/x", None),
+        ("https://api.vercel.com/v1/integrations/deploy/x y", None),
+        ("   ", None),
+    ],
+)
+def test_clean_hook_url(value: str, expected: str | None) -> None:
+    assert clean_hook_url(value) == expected
+
+
 def test_rebuilder_needs_the_setting() -> None:
     assert rebuilder_from_settings(Settings(_env_file=None)) is None
     assert rebuilder_from_settings(Settings(_env_file=None, site_deploy_hook_url="")) is None
-    configured = Settings(_env_file=None, site_deploy_hook_url=HOOK)
+    configured = Settings(_env_file=None, site_deploy_hook_url=f" {HOOK}\n")
     assert isinstance(rebuilder_from_settings(configured), SiteRebuilder)
+    not_a_url = Settings(_env_file=None, site_deploy_hook_url="paste-error")
+    assert rebuilder_from_settings(not_a_url) is None
 
 
 # --- which requests change the site -------------------------------------------------------------
@@ -163,6 +206,7 @@ def test_manual_rebuild_reports_missing_setting_and_failures() -> None:
     assert not_configured.json()["error_code"] == "SITE_REBUILD_NOT_CONFIGURED"
     assert failing.status_code == 503
     assert failing.json()["error_code"] == "SITE_REBUILD_FAILED"
+    assert failing.json()["details"] == {"reason": "hook answered HTTP 500"}
 
 
 def test_manual_rebuild_requires_the_key() -> None:
