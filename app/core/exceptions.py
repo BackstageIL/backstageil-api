@@ -32,6 +32,7 @@ class ErrorCode(StrEnum):
     DUPLICATE_SLUGS = "DUPLICATE_SLUGS"
     CONFIRMATION_MISMATCH = "CONFIRMATION_MISMATCH"
     PICTURE_NOT_FOUND = "PICTURE_NOT_FOUND"
+    RECOMMENDATION_NOT_FOUND = "RECOMMENDATION_NOT_FOUND"
     INVALID_PICTURE = "INVALID_PICTURE"
     PICTURE_TOO_LARGE = "PICTURE_TOO_LARGE"
     TOO_MANY_PICTURES = "TOO_MANY_PICTURES"
@@ -240,6 +241,18 @@ class PictureNotFoundError(DomainException):
 
     def __init__(self, picture_id: int) -> None:
         super().__init__(f"Picture {picture_id} not found", details={"picture_id": picture_id})
+
+
+class RecommendationNotFoundError(DomainException):
+    status_code = status.HTTP_404_NOT_FOUND
+    error_code = ErrorCode.RECOMMENDATION_NOT_FOUND
+    error_type = ErrorType.NOT_FOUND
+
+    def __init__(self, recommendation_id: int) -> None:
+        super().__init__(
+            f"Recommendation {recommendation_id} not found",
+            details={"recommendation_id": recommendation_id},
+        )
 
 
 class InvalidPictureError(DomainException):

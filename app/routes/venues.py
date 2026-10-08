@@ -1,3 +1,4 @@
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Query
@@ -5,11 +6,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cache import public_cache
 from app.db.dependencies import get_session
-from app.db.models import District, VenueType
+from app.db.models import District, RecommendationCategory, VenueType
 from app.schemas.pictures import Picture
+from app.schemas.recommendations import Recommendation
 from app.schemas.venue_import import SLUG_PATTERN
 from app.schemas.venues import HallDocument, VenueDetail, VenuePage, VenueSummary
-from app.services import pictures
+from app.services import pictures, recommendations
 from app.services import venues as service
 
 router = APIRouter(prefix="/venues", tags=["Venues"], dependencies=[Depends(public_cache)])
@@ -17,6 +19,7 @@ router = APIRouter(prefix="/venues", tags=["Venues"], dependencies=[Depends(publ
 Session = Annotated[AsyncSession, Depends(get_session)]
 VenueSlug = Annotated[str, Path(pattern=SLUG_PATTERN, max_length=150)]
 HallSlug = Annotated[str, Path(pattern=SLUG_PATTERN, max_length=80)]
+Today = Annotated[date, Depends(recommendations.israel_today)]
 PicturesBaseUrl = Annotated[str | None, Depends(pictures.get_pictures_base_url)]
 NameSearch = Annotated[str | None, Query(min_length=2, max_length=100, description="Name contains")]
 
@@ -68,3 +71,21 @@ async def list_hall_pictures(
     session: Session, base_url: PicturesBaseUrl, venue_slug: VenueSlug, hall_slug: HallSlug
 ) -> list[Picture]:
     return await pictures.list_pictures(session, venue_slug, hall_slug, base_url=base_url)
+
+
+@router.get(
+    "/{venue_slug}/recommendations",
+    summary="Places near the venue",
+    description="Places crews need near the venue (food, coffee, parking, hotel...). Sponsored "
+    "places come first while their sponsorship runs, then in the venue's display order.",
+)
+async def list_recommendations(
+    session: Session,
+    today: Today,
+    venue_slug: VenueSlug,
+    category: RecommendationCategory | None = None,
+) -> list[Recommendation]:
+    rows = await recommendations.list_recommendations(
+        session, venue_slug, today=today, category=category
+    )
+    return [recommendations.public_view(row, today) for row in rows]
