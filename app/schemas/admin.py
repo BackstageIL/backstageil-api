@@ -29,6 +29,7 @@ class VenuePatch(BaseModel):
     name: SafeText | None = Field(default=None, min_length=2, max_length=150)
     name_he: SafeText | None = Field(default=None, min_length=2, max_length=150)
     street_address: SafeText | None = Field(default=None, max_length=200)
+    street_address_he: SafeText | None = Field(default=None, max_length=200)
     venue_type: VenueType | None = None
     website: HttpUrl | None = None
     city_code: PositiveInt | None = None

@@ -49,6 +49,8 @@ class VenueImport(BaseModel):
     name_he: SafeText | None = Field(default=None, min_length=2, max_length=150)
     city_code: PositiveInt  # official CBS locality code (cities.official_code)
     street_address: SafeText | None = Field(default=None, max_length=200)
+    # Hebrew address; when left out, an existing Hebrew address is kept on re-import
+    street_address_he: SafeText | None = Field(default=None, max_length=200)
     venue_type: VenueType
     website: HttpUrl | None = None
 

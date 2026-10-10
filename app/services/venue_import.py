@@ -34,8 +34,10 @@ async def import_venue(
     if city_id is None:
         raise UnknownCityError(item.venue.city_code)
 
-    # A Hebrew name left out of the item keeps the one already stored (English-only re-imports)
-    keep_he = {"name_he"} if item.venue.name_he is None else set()
+    # Hebrew fields left out of the item keep what is already stored (English-only re-imports)
+    keep_he = {
+        field for field in ("name_he", "street_address_he") if getattr(item.venue, field) is None
+    }
     venue_values = item.venue.model_dump(exclude={"city_code", "website", *keep_he})
     venue_values |= {
         "city_id": city_id,

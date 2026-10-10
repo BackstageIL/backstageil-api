@@ -78,6 +78,7 @@ async def list_venues[S: VenueSummary](
             name_he=venue.name_he,
             venue_type=venue.venue_type,
             street_address=venue.street_address,
+            street_address_he=venue.street_address_he,
             city=CityRef.model_validate(city),
             hall_count=count,
             is_published=venue.is_published,  # ignored by the public model
@@ -137,6 +138,7 @@ async def get_venue[D: VenueDetail](
         name_he=venue.name_he,
         venue_type=venue.venue_type,
         street_address=venue.street_address,
+        street_address_he=venue.street_address_he,
         website=venue.website,
         city=await _city_ref(session, venue.city_id),
         halls=[hall_model.model_validate(hall) for hall in halls],
@@ -163,6 +165,7 @@ async def hall_document[H: HallDocument](session: AsyncSession, hall: Hall, *, m
         name=venue.name,
         name_he=venue.name_he,
         street_address=venue.street_address,
+        street_address_he=venue.street_address_he,
         city=await _city_ref(session, venue.city_id),
     )
     values: dict[str, Any] = {

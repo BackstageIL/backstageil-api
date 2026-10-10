@@ -55,6 +55,7 @@ class Venue(TimestampMixin, Base):
     name_he: Mapped[str | None] = mapped_column(String(150))  # Hebrew name (BSIL-48)
     city_id: Mapped[int] = mapped_column(ForeignKey("cities.id", ondelete="RESTRICT"))
     street_address: Mapped[str | None] = mapped_column(String(200))
+    street_address_he: Mapped[str | None] = mapped_column(String(200))  # Hebrew (BSIL-50)
     latitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6))
     longitude: Mapped[Decimal | None] = mapped_column(Numeric(9, 6))
     website: Mapped[str | None] = mapped_column(String(300))
