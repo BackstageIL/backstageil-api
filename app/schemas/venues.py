@@ -30,6 +30,7 @@ class VenueSummary(_FromRow):
     name_he: str | None
     venue_type: VenueType
     street_address: str | None
+    street_address_he: str | None
     city: CityRef
     hall_count: int
 
@@ -56,6 +57,7 @@ class VenueDetail(_FromRow):
     name_he: str | None
     venue_type: VenueType
     street_address: str | None
+    street_address_he: str | None
     website: str | None
     city: CityRef
     halls: list[HallSummary]
@@ -66,6 +68,7 @@ class VenueRef(_FromRow):
     name: str
     name_he: str | None
     street_address: str | None
+    street_address_he: str | None
     city: CityRef
 
 
