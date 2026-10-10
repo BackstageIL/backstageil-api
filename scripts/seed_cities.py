@@ -52,6 +52,11 @@ STATUS_LOCAL_COUNCIL = 99
 KIBBUTZ_FORMS = frozenset({330, 193})
 MOSHAV_FORMS = frozenset({310, 320, 191, 192})
 
+# English names for localities the CBS file publishes without one (added with --code for a venue)
+ENGLISH_NAMES: dict[int, str] = {
+    1711: "Mif'alei Tzemach",  # מפעלי צמח, Tzemach junction (Beit Gabriel)
+}
+
 DISTRICTS: dict[int, District] = {
     1: District.JERUSALEM,
     2: District.NORTH,
@@ -89,7 +94,8 @@ def _english_name(record: dict[str, Any]) -> str:
     name = (record.get(F_NAME_EN) or "").strip()
     if name:
         return " ".join(name.split())
-    return (record.get(F_TRANSLIT) or "").strip().title()
+    translit = (record.get(F_TRANSLIT) or "").strip().title()
+    return translit or ENGLISH_NAMES.get(int(record[F_CODE]), "")
 
 
 def parse_record(

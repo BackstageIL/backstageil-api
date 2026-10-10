@@ -92,6 +92,16 @@ def test_record_without_any_english_name_is_skipped() -> None:
     assert parse_record(_record(1722, "", status=99, form=None)) is None
 
 
+def test_known_unnamed_locality_gets_its_english_name() -> None:
+    record = _record(1711, "", status=6, form=520, name_he="מפעלי צמח")
+
+    assert parse_record(record) is None  # not a seeded locality type
+    row = parse_record(record, frozenset({1711}))
+
+    assert row is not None
+    assert (row.name_en, row.name_he) == ("Mif'alei Tzemach", "מפעלי צמח")
+
+
 def test_unknown_district_code_is_none() -> None:
     row = parse_record(_record(1, "Somewhere", status=0, form=160, district=None))
 
