@@ -71,7 +71,7 @@ uv run uvicorn app.main:app --reload
 | `GET /api/v1/venues/{venue_slug}/halls/{hall_slug}` | Hall technical document (fields, `field_notes`, `extras`) |
 | `GET /api/v1/cities` | Cities that have venues, with counts |
 
-Successful responses are cacheable (`Cache-Control: public, max-age=60, s-maxage=3600, stale-while-revalidate=86400`).
+Successful responses may be kept by browsers for a minute (`Cache-Control: private, max-age=60`); the CDN never stores them, so the website rebuild after an admin write always reads fresh data.
 
 ## Admin access
 
