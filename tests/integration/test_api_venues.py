@@ -261,3 +261,6 @@ async def test_successful_responses_are_cacheable(
 
     assert response.status_code == 200
     assert response.headers["cache-control"] == PUBLIC_CACHE_CONTROL
+    # Never stored by the CDN: site rebuilds must read fresh data (BSIL-53)
+    assert "s-maxage" not in PUBLIC_CACHE_CONTROL
+    assert "stale-while-revalidate" not in PUBLIC_CACHE_CONTROL
