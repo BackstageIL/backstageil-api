@@ -45,7 +45,8 @@ def _filtered_venues(filters: VenueFilters, published_only: bool) -> Select[tupl
     if filters.published is not None:
         query = query.where(Venue.is_published.is_(filters.published))
     if filters.q:
-        query = query.where(Venue.name.ilike(f"%{filters.q}%"))
+        # autoescape: % and _ in the search text are plain characters, not wildcards
+        query = query.where(Venue.name.icontains(filters.q, autoescape=True))
     if filters.city:
         query = query.where(City.slug == filters.city)
     if filters.district:

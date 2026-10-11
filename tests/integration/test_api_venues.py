@@ -125,6 +125,16 @@ async def test_list_returns_only_published_venues_sorted_with_hall_counts(
     assert alpha["name_he"] is None  # not filled yet
 
 
+@pytest.mark.parametrize("q", ["%%", "zq_", "z%x"])
+async def test_search_treats_wildcards_as_text(
+    client: httpx2.AsyncClient, data: dict[str, City], q: str
+) -> None:
+    response = await client.get(f"{API}/venues", params={"q": q})
+
+    assert response.status_code == 200
+    assert response.json()["items"] == []
+
+
 async def test_search_is_case_insensitive(
     client: httpx2.AsyncClient, data: dict[str, City]
 ) -> None:
