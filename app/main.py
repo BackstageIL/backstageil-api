@@ -1,3 +1,4 @@
+import secrets
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -12,6 +13,7 @@ from app.core.security import FailedAttemptLimiter
 from app.db.session import Database
 from app.routes import api_router
 from app.routes.health import router as health_router
+from app.services.notifications import notifier_from_settings
 from app.services.site_rebuild import add_rebuild_after_admin_writes, rebuilder_from_settings
 
 logger = get_logger(__name__)
@@ -53,6 +55,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.database = None
     app.state.picture_storage = None  # created on first use (BSIL-24)
     app.state.site_rebuilder = rebuilder_from_settings(settings)  # None = no rebuilds (BSIL-46)
+    app.state.submission_storage = None  # private store, created on first use (BSIL-58)
+    app.state.submission_notifier = notifier_from_settings(settings)  # None = no emails
+    # Key for anonymous connection codes when no admin key hash is set (local/CI only)
+    app.state.fallback_hash_secret = secrets.token_hex(32)
     app.state.admin_limiter = FailedAttemptLimiter(
         settings.admin_max_failed_attempts, settings.admin_failed_window_seconds
     )

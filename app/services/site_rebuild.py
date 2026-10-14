@@ -69,12 +69,14 @@ SKIP_HEADER = "X-Site-Rebuild"  # "skip": bulk scripts rebuild once at the end i
 
 
 def changes_site_data(request: Request, response: Response) -> bool:
-    """A successful admin write, other than a dry run, the manual rebuild itself, or a request
-    that asks to skip it (`X-Site-Rebuild: skip`)."""
+    """A successful admin write, other than a dry run, the manual rebuild itself, a request
+    that asks to skip it (`X-Site-Rebuild: skip`), or a change to submissions (never on the
+    site)."""
     path = request.url.path
     return (
         path.startswith(f"{ADMIN_PREFIX}/")
         and path != MANUAL_REBUILD_PATH
+        and not path.startswith(f"{ADMIN_PREFIX}/submissions")
         and request.method in _WRITE_METHODS
         and 200 <= response.status_code < 300
         and request.query_params.get("dry_run", "").lower() not in _TRUE

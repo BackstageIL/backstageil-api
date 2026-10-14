@@ -1,13 +1,14 @@
 """
 Object storage for picture files, behind a small interface so the provider can be swapped.
 
-Production uses a public Vercel Blob store, called through its HTTP API (two calls: upload and
-delete; the official SDK is avoided for its many dependencies and telemetry). Files are immutable
-(their keys contain a content hash), so they are stored with a one-year cache lifetime.
+Production uses a public Vercel Blob store, called through its HTTP API (upload, delete and, for
+private stores, download; the official SDK is avoided for its many dependencies and telemetry).
+Picture files are immutable (their keys contain a content hash), so they are stored with a
+one-year cache lifetime. Submitted files (BSIL-58) use a second, private store.
 """
 
 from collections.abc import Sequence
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 import httpx2
 from fastapi import Request
@@ -30,41 +31,61 @@ class PictureStorage(Protocol):
     async def delete(self, keys: Sequence[str]) -> None: ...
 
 
-def blob_store_url(token: str) -> str:
-    """Public URL of the store a read-write token belongs to.
+class PrivateStorage(PictureStorage, Protocol):
+    """A store whose files can only be read with its token (submitted files, BSIL-58)."""
 
-    Tokens look like `vercel_blob_rw_<storeId>_<secret>`; files are served from
-    `https://<storeId>.public.blob.vercel-storage.com/<pathname>`.
+    async def get(self, key: str) -> bytes: ...
+
+
+Access = Literal["public", "private"]
+
+
+def blob_store_url(token: str, access: Access = "public") -> str:
+    """URL of the store a read-write token belongs to.
+
+    Tokens look like `vercel_blob_rw_<storeId>_<secret>`; files live at
+    `https://<storeId>.<access>.blob.vercel-storage.com/<pathname>` (private files can only be
+    read with the token).
     """
     parts = token.split("_")
     if len(parts) < 5 or parts[:3] != ["vercel", "blob", "rw"] or not parts[3].isalnum():
         raise PicturesNotConfiguredError(_TOKEN_SETTING)
-    return f"https://{parts[3].lower()}.public.blob.vercel-storage.com"
+    return f"https://{parts[3].lower()}.{access}.blob.vercel-storage.com"
 
 
 class VercelBlobStorage:
-    """A public Vercel Blob store. `transport` is for tests."""
+    """A Vercel Blob store, public (pictures) or private (submissions). `transport` is for
+    tests."""
 
-    def __init__(self, token: str, transport: httpx2.AsyncBaseTransport | None = None) -> None:
-        self.base_url = blob_store_url(token)
+    def __init__(
+        self,
+        token: str,
+        transport: httpx2.AsyncBaseTransport | None = None,
+        access: Access = "public",
+    ) -> None:
+        self.access: Access = access
+        self.base_url = blob_store_url(token, access)
         self._token = token
         self._transport = transport
 
     async def put(self, key: str, data: bytes, content_type: str) -> None:
+        headers = {
+            "x-vercel-blob-access": self.access,
+            "x-content-type": content_type,
+            "x-add-random-suffix": "0",
+            # Same key = same content: rewriting a file left by a failed upload is safe
+            "x-allow-overwrite": "1",
+        }
+        if self.access == "public":
+            headers["x-cache-control-max-age"] = str(CACHE_MAX_AGE_SECONDS)
         await self._send(
-            "PUT",
-            BLOB_API_URL,
-            params={"pathname": key},
-            content=data,
-            headers={
-                "x-vercel-blob-access": "public",
-                "x-content-type": content_type,
-                "x-add-random-suffix": "0",
-                # Same key = same content hash: rewriting a file left by a failed upload is safe
-                "x-allow-overwrite": "1",
-                "x-cache-control-max-age": str(CACHE_MAX_AGE_SECONDS),
-            },
+            "PUT", BLOB_API_URL, params={"pathname": key}, content=data, headers=headers
         )
+
+    async def get(self, key: str) -> bytes:
+        """A file's content (the way to read files of a private store)."""
+        response = await self._send("GET", f"{self.base_url}/{key}")
+        return response.content
 
     async def delete(self, keys: Sequence[str]) -> None:
         if not keys:
@@ -72,7 +93,7 @@ class VercelBlobStorage:
         urls = [f"{self.base_url}/{key}" for key in keys]
         await self._send("POST", f"{BLOB_API_URL}/delete", json={"urls": urls})
 
-    async def _send(self, method: str, url: str, **kwargs: Any) -> None:
+    async def _send(self, method: str, url: str, **kwargs: Any) -> httpx2.Response:
         # Retries cover connection failures only; a request is never sent twice.
         transport = self._transport or httpx2.AsyncHTTPTransport(retries=2)
         headers = {"authorization": f"Bearer {self._token}", "x-api-version": BLOB_API_VERSION}
@@ -82,6 +103,7 @@ class VercelBlobStorage:
             ) as client:
                 response = await client.request(method, url, **kwargs)
                 response.raise_for_status()
+                return response
         except httpx2.HTTPStatusError as exc:
             # The body explains the error (e.g. invalid token); it never contains the token.
             logger.error(

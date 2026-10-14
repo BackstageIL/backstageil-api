@@ -1,7 +1,8 @@
 """Admin-only routes. Every route here requires the admin API key (X-API-Key)."""
 
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Annotated
+from urllib.parse import quote
 
 from fastapi import (
     APIRouter,
@@ -19,10 +20,15 @@ from fastapi import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cache import no_store
-from app.core.exceptions import SiteRebuildNotConfiguredError
+from app.core.exceptions import (
+    PictureStorageUnavailableError,
+    SiteRebuildNotConfiguredError,
+    SubmissionsNotConfiguredError,
+)
 from app.core.security import require_admin
 from app.db.dependencies import get_session
-from app.db.models import District, RecommendationCategory, VenueType
+from app.db.models import District, RecommendationCategory, SubmissionStatus, VenueType
+from app.routes.submissions import get_submission_storage
 from app.schemas.admin import (
     AdminHallDocument,
     AdminHallSummary,
@@ -42,10 +48,12 @@ from app.schemas.recommendations import (
     RecommendationCreate,
     RecommendationPatch,
 )
+from app.schemas.submissions import AdminSubmission, SubmissionPatch
 from app.schemas.venue_import import SLUG_PATTERN, SafeText, VenueImportItem
-from app.services import admin_venues, pictures, recommendations, venues
+from app.services import admin_venues, pictures, recommendations, submissions, venues
 from app.services.picture_storage import (
     PictureStorage,
+    PrivateStorage,
     delete_files_quietly,
     get_optional_picture_storage,
     get_picture_storage,
@@ -376,6 +384,84 @@ async def delete_recommendation(
 ) -> Response:
     await recommendations.delete_recommendation(session, venue_slug, recommendation_id)
     await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT, headers={"Cache-Control": "no-store"})
+
+
+# --- Submissions (BSIL-58) ----------------------------------------------------------------------
+# Never on the site, so these don't trigger a website rebuild.
+
+SUBMISSIONS = "/submissions"
+SubmissionId = Annotated[int, Path(ge=1)]
+SubmissionStore = Annotated[PrivateStorage | None, Depends(get_submission_storage)]
+
+
+@router.get(SUBMISSIONS, summary="Submissions from the website, newest first")
+async def list_submissions(
+    session: Session,
+    status_: Annotated[SubmissionStatus | None, Query(alias="status")] = SubmissionStatus.NEW,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> list[AdminSubmission]:
+    rows = await submissions.list_submissions(session, status_, limit)
+    return [submissions.to_admin(row) for row in rows]
+
+
+@router.get(SUBMISSIONS + "/{submission_id}", summary="One submission")
+async def get_submission(session: Session, submission_id: SubmissionId) -> AdminSubmission:
+    return submissions.to_admin(await submissions.get_submission(session, submission_id))
+
+
+@router.get(
+    SUBMISSIONS + "/{submission_id}/files/{file_index}",
+    summary="Download a submitted file (from the private store)",
+    response_class=Response,
+)
+async def download_submission_file(
+    session: Session,
+    storage: SubmissionStore,
+    submission_id: SubmissionId,
+    file_index: Annotated[int, Path(ge=0)],
+) -> Response:
+    if storage is None:
+        raise SubmissionsNotConfiguredError()
+    file = submissions.file_of(await submissions.get_submission(session, submission_id), file_index)
+    try:
+        data = await storage.get(file["key"])
+    except PictureStorageUnavailableError as exc:
+        raise SubmissionsNotConfiguredError() from exc
+    return Response(
+        content=data,
+        media_type=file["content_type"],
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(file['name'])}",
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@router.patch(
+    SUBMISSIONS + "/{submission_id}",
+    summary="Mark a submission handled, rejected or new",
+    description="Handled or rejected clears the sender's contact details.",
+)
+async def patch_submission(
+    session: Session, submission_id: SubmissionId, patch: SubmissionPatch
+) -> AdminSubmission:
+    row = await submissions.set_status(session, submission_id, patch.status, datetime.now(UTC))
+    await session.commit()
+    return submissions.to_admin(row)
+
+
+@router.delete(
+    SUBMISSIONS + "/{submission_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a submission and its files",
+)
+async def delete_submission(
+    session: Session, storage: SubmissionStore, submission_id: SubmissionId
+) -> Response:
+    keys = await submissions.delete_submission(session, submission_id)
+    await session.commit()
+    await delete_files_quietly(storage, keys)
     return Response(status_code=status.HTTP_204_NO_CONTENT, headers={"Cache-Control": "no-store"})
 
 

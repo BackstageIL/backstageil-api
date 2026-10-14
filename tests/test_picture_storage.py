@@ -153,3 +153,31 @@ def test_writing_routes_answer_503_without_a_valid_token(token: str | None) -> N
     assert get_optional_picture_storage(request) is None
     with pytest.raises(PicturesNotConfiguredError):
         get_picture_storage(request)
+
+
+# --- private store (submissions, BSIL-58) -------------------------------------------------------
+
+PRIVATE_URL = "https://abc123xyz.private.blob.vercel-storage.com"
+
+
+async def test_private_store_uploads_private_files_without_a_public_cache() -> None:
+    recorder = Recorder()
+    storage = VercelBlobStorage(TOKEN, transport=httpx2.MockTransport(recorder), access="private")
+
+    await storage.put("submissions/x/1-rider.pdf", b"%PDF", "application/pdf")
+
+    (request,) = recorder.requests
+    assert storage.base_url == PRIVATE_URL
+    assert request.headers["x-vercel-blob-access"] == "private"
+    assert "x-cache-control-max-age" not in request.headers
+
+
+async def test_private_files_are_read_with_the_token() -> None:
+    def answer(request: httpx2.Request) -> httpx2.Response:
+        assert str(request.url) == f"{PRIVATE_URL}/submissions/x/1-rider.pdf"
+        assert request.headers["authorization"] == f"Bearer {TOKEN}"
+        return httpx2.Response(200, content=b"%PDF-1.7")
+
+    storage = VercelBlobStorage(TOKEN, transport=httpx2.MockTransport(answer), access="private")
+
+    assert await storage.get("submissions/x/1-rider.pdf") == b"%PDF-1.7"

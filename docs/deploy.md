@@ -23,10 +23,13 @@ Vercel environment variables (Project → Settings → Environment Variables):
 | `DB_POOLED` | `true` | `true` |
 | `ENVIRONMENT` | `production` | `ci` |
 | `ADMIN_API_KEY_HASH` | hash of the production admin key | hash of the dev admin key |
-| `CORS_ORIGINS` | the website origin(s), once it exists | — |
+| `CORS_ORIGINS` | `["https://www.backstageil.com"]` (the contribution form posts from the browser) | — |
 | `SENTRY_DSN` | Sentry project DSN (see [monitoring.md](monitoring.md)) | — |
 | `BLOB_READ_WRITE_TOKEN` (sensitive) | read-write token of store `backstageil-pictures` | read-write token of store `backstageil-pictures-dev` |
 | `SITE_DEPLOY_HOOK_URL` (sensitive) | deploy hook of the `backstageil-web` project (main) | — (previews never rebuild the site) |
+| `SUBMISSIONS_BLOB_TOKEN` (sensitive) | read-write token of the **private** store `backstageil-submissions` | — (text-only submissions) |
+| `RESEND_API_KEY` (sensitive) | Resend API key (emails about new submissions) | — |
+| `SUBMISSIONS_NOTIFY_EMAIL` | the Resend account's own address (Resend's shared sender only delivers there) | — |
 
 GitHub (`BackstageIL/backstageil-api`):
 

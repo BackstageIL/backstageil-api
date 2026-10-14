@@ -83,7 +83,7 @@ class FailedAttemptLimiter:
         self._failures[client].append(time.monotonic())
 
 
-def _client_address(request: Request) -> str:
+def client_address(request: Request) -> str:
     # Behind the platform proxy, uvicorn --proxy-headers puts the real address here.
     return request.client.host if request.client else "unknown"
 
@@ -98,7 +98,7 @@ def require_admin(
         raise AdminNotConfiguredError()
 
     limiter: FailedAttemptLimiter = request.app.state.admin_limiter
-    client = _client_address(request)
+    client = client_address(request)
     wait = limiter.retry_after(client)
     if wait:
         raise TooManyAttemptsError(wait)
