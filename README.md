@@ -70,8 +70,20 @@ uv run uvicorn app.main:app --reload
 | `GET /api/v1/venues/{venue_slug}` | Venue with its halls |
 | `GET /api/v1/venues/{venue_slug}/halls/{hall_slug}` | Hall technical document (fields, `field_notes`, `extras`) |
 | `GET /api/v1/cities` | Cities that have venues, with counts |
+| `POST /api/v1/submissions` | The website's contribution form (multipart): never published, reviewed by the admin |
 
 Successful responses may be kept by browsers for a minute (`Cache-Control: private, max-age=60`); the CDN never stores them, so the website rebuild after an admin write always reads fresh data.
+
+## Submissions from the website (BSIL-58)
+
+Anyone can send information and files (photos, PDF, Word, Excel; at most 5 files and 4 MB in
+total). Nothing is published from a submission: the admin reviews each one
+(`uv run python -m scripts.review_submissions list|show|done|reject|delete`) and turns what's
+useful into venue data. Files go to a **private** Vercel Blob store; photos are re-encoded without
+metadata (EXIF, GPS). Spam is handled without third parties: a hidden trap field and a minimum fill
+time drop bots quietly, and each connection may send 5 submissions an hour (counted by an anonymous
+keyed hash that changes daily; addresses are never stored). The admin gets an email per submission
+(Resend, at most 30 a day). Contact details are optional and cleared when a submission is handled.
 
 ## Admin access
 

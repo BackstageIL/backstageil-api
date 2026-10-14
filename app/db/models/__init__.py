@@ -4,6 +4,7 @@ from app.db.models.city import City, District, LocalityType
 from app.db.models.hall import Hall, PipeType, StageFloor
 from app.db.models.hall_picture import HallPicture
 from app.db.models.recommendation import Recommendation, RecommendationCategory
+from app.db.models.submission import Submission, SubmissionKind, SubmissionStatus
 from app.db.models.venue import Venue, VenueType
 
 __all__ = [
@@ -16,6 +17,9 @@ __all__ = [
     "Recommendation",
     "RecommendationCategory",
     "StageFloor",
+    "Submission",
+    "SubmissionKind",
+    "SubmissionStatus",
     "Venue",
     "VenueType",
 ]

@@ -45,6 +45,18 @@ class Settings(BaseSettings):
     # Vercel deploy hook of the website (BSIL-46): called after admin writes so the site is
     # rebuilt from fresh data. A secret (anyone with it can trigger builds). Unset = no rebuilds.
     site_deploy_hook_url: SecretStr | None = None
+    # The website's address, used in links (e.g. in submission emails)
+    site_url: str = "https://www.backstageil.com"
+
+    # Submissions from the website (BSIL-58). Files go to a PRIVATE Vercel Blob store (its own
+    # read-write token, never the public pictures store). Unset = text-only submissions.
+    submissions_blob_token: SecretStr | None = None
+    # Email about each new submission, sent through Resend. Unset key or address = no emails.
+    resend_api_key: SecretStr | None = None
+    submissions_notify_email: str | None = None
+    # Resend's shared sender only delivers to the Resend account's own address; fine for
+    # notifying the owner. A sender on our domain needs the domain verified in Resend.
+    submissions_from_email: str = "BackstageIL <onboarding@resend.dev>"
 
     @field_validator(
         "database_url",
@@ -53,6 +65,9 @@ class Settings(BaseSettings):
         "blob_read_write_token",
         "pictures_base_url",
         "site_deploy_hook_url",
+        "submissions_blob_token",
+        "resend_api_key",
+        "submissions_notify_email",
         mode="before",
     )
     @classmethod

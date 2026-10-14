@@ -41,6 +41,11 @@ class ErrorCode(StrEnum):
     PICTURE_STORAGE_UNAVAILABLE = "PICTURE_STORAGE_UNAVAILABLE"
     SITE_REBUILD_NOT_CONFIGURED = "SITE_REBUILD_NOT_CONFIGURED"
     SITE_REBUILD_FAILED = "SITE_REBUILD_FAILED"
+    INVALID_SUBMISSION_FILE = "INVALID_SUBMISSION_FILE"
+    SUBMISSION_TOO_LARGE = "SUBMISSION_TOO_LARGE"
+    TOO_MANY_SUBMISSIONS = "TOO_MANY_SUBMISSIONS"
+    SUBMISSIONS_NOT_CONFIGURED = "SUBMISSIONS_NOT_CONFIGURED"
+    SUBMISSION_NOT_FOUND = "SUBMISSION_NOT_FOUND"
     INTERNAL_ERROR = "INTERNAL_ERROR"
 
 
@@ -337,4 +342,63 @@ class SiteRebuildFailedError(DomainException):
         super().__init__(
             "The website rebuild could not be started; try again later",
             details={"reason": reason},
+        )
+
+
+class InvalidSubmissionFileError(DomainException):
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
+    error_code = ErrorCode.INVALID_SUBMISSION_FILE
+    error_type = ErrorType.VALIDATION
+
+    def __init__(self, name: str) -> None:
+        super().__init__(
+            f"{name}: only photos (JPEG, PNG, WebP), PDF, Word and Excel files can be sent",
+            details={"file": name},
+        )
+
+
+class SubmissionTooLargeError(DomainException):
+    status_code = status.HTTP_413_CONTENT_TOO_LARGE
+    error_code = ErrorCode.SUBMISSION_TOO_LARGE
+    error_type = ErrorType.VALIDATION
+
+    def __init__(self, max_files: int, max_bytes: int) -> None:
+        super().__init__(
+            f"Send at most {max_files} files and {max_bytes // 1_000_000} MB in total; "
+            "email larger files to info@backstageil.com",
+            details={"max_files": max_files, "max_bytes": max_bytes},
+        )
+
+
+class TooManySubmissionsError(DomainException):
+    status_code = status.HTTP_429_TOO_MANY_REQUESTS
+    error_code = ErrorCode.TOO_MANY_SUBMISSIONS
+    error_type = ErrorType.CONFLICT
+
+    def __init__(self) -> None:
+        super().__init__("Too many submissions from this connection; try again in an hour")
+
+
+class SubmissionsNotConfiguredError(DomainException):
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    error_code = ErrorCode.SUBMISSIONS_NOT_CONFIGURED
+    error_type = ErrorType.UNAVAILABLE
+
+    def __init__(self) -> None:
+        super().__init__(
+            "Sending files isn't available right now; send text only, "
+            "or email the files to info@backstageil.com"
+        )
+
+
+class SubmissionNotFoundError(DomainException):
+    status_code = status.HTTP_404_NOT_FOUND
+    error_code = ErrorCode.SUBMISSION_NOT_FOUND
+    error_type = ErrorType.NOT_FOUND
+
+    def __init__(self, submission_id: int, file_index: int | None = None) -> None:
+        what = f"File {file_index} of submission" if file_index is not None else "Submission"
+        super().__init__(
+            f"{what} {submission_id} not found",
+            details={"submission_id": submission_id, "file_index": file_index},
         )
