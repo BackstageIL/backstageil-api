@@ -55,6 +55,7 @@ MOSHAV_FORMS = frozenset({310, 320, 191, 192})
 # English names for localities the CBS file publishes without one (added with --code for a venue)
 ENGLISH_NAMES: dict[int, str] = {
     1711: "Mif'alei Tzemach",  # מפעלי צמח, Tzemach junction (Beit Gabriel)
+    1722: "Migdal Tefen",  # מגדל תפן, Tefen industrial park (Zikit Theater)
 }
 
 DISTRICTS: dict[int, District] = {

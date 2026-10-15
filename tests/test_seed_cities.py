@@ -89,17 +89,23 @@ def test_english_name_falls_back_to_transliteration() -> None:
 
 
 def test_record_without_any_english_name_is_skipped() -> None:
-    assert parse_record(_record(1722, "", status=99, form=None)) is None
+    assert parse_record(_record(9999, "", status=99, form=None)) is None
 
 
-def test_known_unnamed_locality_gets_its_english_name() -> None:
-    record = _record(1711, "", status=6, form=520, name_he="מפעלי צמח")
+@pytest.mark.parametrize(
+    ("code", "name_he", "name_en"),
+    [(1711, "מפעלי צמח", "Mif'alei Tzemach"), (1722, "מגדל תפן", "Migdal Tefen")],
+)
+def test_known_unnamed_locality_gets_its_english_name(
+    code: int, name_he: str, name_en: str
+) -> None:
+    record = _record(code, "", status=6, form=520, name_he=name_he)
 
     assert parse_record(record) is None  # not a seeded locality type
-    row = parse_record(record, frozenset({1711}))
+    row = parse_record(record, frozenset({code}))
 
     assert row is not None
-    assert (row.name_en, row.name_he) == ("Mif'alei Tzemach", "מפעלי צמח")
+    assert (row.name_en, row.name_he) == (name_en, name_he)
 
 
 def test_unknown_district_code_is_none() -> None:
@@ -114,15 +120,15 @@ def test_select_rows_reports_skipped_and_fails_on_unusable_requested_code(
 ) -> None:
     records = [
         _record(5000, "Tel Aviv - Yafo", status=0, form=130),
-        _record(1722, "", status=99, form=None, name_he="מגדל תפן"),
+        _record(9999, "", status=99, form=None, name_he="יישוב ללא שם באנגלית"),
     ]
 
     rows = select_rows(records, frozenset())
     assert [r.official_code for r in rows] == [5000]
-    assert "Skipped 1722" in capsys.readouterr().out
+    assert "Skipped 9999" in capsys.readouterr().out
 
-    with pytest.raises(SystemExit, match=r"\[1722\]"):
-        select_rows(records, frozenset({1722}))
+    with pytest.raises(SystemExit, match=r"\[9999\]"):
+        select_rows(records, frozenset({9999}))
 
 
 def test_colliding_slugs_get_the_code_appended() -> None:
