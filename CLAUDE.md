@@ -22,7 +22,8 @@ uv run alembic revision --autogenerate -m "..."  # new migration after model cha
 - `app/db/` engine/session (`Database`), ORM `Base`, FastAPI dependencies
 - `app/routes/` one `router` per domain; versioned routers go into `api_router` (`/api/v1`)
   - public read API: `/api/v1/venues`, `/venues/{slug}`, `/venues/{slug}/halls/{slug}`,
-    `/venues/{slug}/halls/{slug}/pictures`, `/venues/{slug}/recommendations`, `/cities`
+    `/venues/{slug}/halls/{slug}/pictures`, `/venues/{slug}/pictures` (the building, BSIL-69),
+    `/venues/{slug}/recommendations`, `/cities`
     (published rows only; `public_cache` dependency sets Cache-Control on 200s)
   - public write: `POST /api/v1/submissions` (website contribution form, BSIL-58): never published,
     files in a private Blob store, reviewed via `scripts/review_submissions.py`

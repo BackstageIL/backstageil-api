@@ -285,9 +285,10 @@ class TooManyPicturesError(DomainException):
     error_code = ErrorCode.TOO_MANY_PICTURES
     error_type = ErrorType.CONFLICT
 
-    def __init__(self, limit: int) -> None:
+    def __init__(self, limit: int, owner: str = "hall") -> None:
         super().__init__(
-            f"A hall can have at most {limit} pictures; delete one first", details={"limit": limit}
+            f"A {owner} can have at most {limit} pictures; delete one first",
+            details={"limit": limit},
         )
 
 

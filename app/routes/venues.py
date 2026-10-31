@@ -74,6 +74,18 @@ async def list_hall_pictures(
 
 
 @router.get(
+    "/{venue_slug}/pictures",
+    summary="Venue pictures",
+    description="Pictures of the venue itself (the building, the entrance), in display order; hall "
+    "pictures are listed per hall. Captions carry the photographer credit a free license requires.",
+)
+async def list_venue_pictures(
+    session: Session, base_url: PicturesBaseUrl, venue_slug: VenueSlug
+) -> list[Picture]:
+    return await pictures.list_venue_pictures(session, venue_slug, base_url=base_url)
+
+
+@router.get(
     "/{venue_slug}/recommendations",
     summary="Places near the venue",
     description="Places crews need near the venue (food, coffee, parking, hotel...). Sponsored "

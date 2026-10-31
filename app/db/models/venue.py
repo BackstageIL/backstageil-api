@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from app.db.models.city import City
     from app.db.models.hall import Hall
     from app.db.models.recommendation import Recommendation
+    from app.db.models.venue_picture import VenuePicture
 
 
 class VenueType(StrEnum):
@@ -68,4 +69,11 @@ class Venue(TimestampMixin, Base):
     )
     recommendations: Mapped[list[Recommendation]] = relationship(
         back_populates="venue", lazy="raise", cascade="all, delete-orphan", passive_deletes=True
+    )
+    pictures: Mapped[list[VenuePicture]] = relationship(
+        back_populates="venue",
+        lazy="raise",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="VenuePicture.display_order",
     )

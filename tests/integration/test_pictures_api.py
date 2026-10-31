@@ -405,3 +405,133 @@ async def test_deleting_hall_or_venue_removes_picture_files(
 
     assert response.status_code == 204
     assert storage.files == {}
+
+
+# --- venue pictures (BSIL-69) -------------------------------------------------------------------
+
+VENUE_ADMIN = "/api/v1/admin/venues/zqp-venue/pictures"
+VENUE_PUBLIC = "/api/v1/venues/zqp-venue/pictures"
+CREDIT = "Photo: Zqp Photographer, CC BY-SA 4.0, Wikimedia Commons"
+
+
+async def upload_venue(
+    client: httpx2.AsyncClient, data: bytes, caption: str | None = None
+) -> httpx2.Response:
+    form = {"caption": caption} if caption is not None else {}
+    return await client.post(
+        VENUE_ADMIN, files={"file": ("building.jpg", data, "image/jpeg")}, data=form, headers=AUTH
+    )
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [("GET", ""), ("POST", ""), ("PATCH", "/1"), ("DELETE", "/1")],
+)
+async def test_admin_venue_picture_routes_require_the_key(
+    client: httpx2.AsyncClient, method: str, path: str
+) -> None:
+    response = await client.request(method, f"{VENUE_ADMIN}{path}")
+
+    assert response.status_code == 401
+
+
+async def test_venue_picture_upload_and_public_list(
+    client: httpx2.AsyncClient, hall: Hall, storage: MemoryStorage
+) -> None:
+    response = await upload_venue(client, jpeg(), caption=CREDIT)
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["storage_key"].startswith("venue-pictures/")  # never shares files with halls
+    assert body["caption"] == CREDIT
+    public = await client.get(VENUE_PUBLIC)
+    assert public.status_code == 200
+    assert public.headers["cache-control"] == PUBLIC_CACHE_CONTROL
+    assert [p["caption"] for p in public.json()] == [CREDIT]
+    # venue pictures stay out of the hall gallery
+    assert (await client.get(PUBLIC)).json() == []
+
+
+async def test_same_file_as_a_hall_and_a_venue_picture_keeps_separate_files(
+    client: httpx2.AsyncClient, hall: Hall, storage: MemoryStorage
+) -> None:
+    hall_picture = (await upload(client, jpeg())).json()
+    venue_picture = (await upload_venue(client, jpeg())).json()
+    assert hall_picture["storage_key"] != venue_picture["storage_key"]
+
+    response = await client.delete(f"{VENUE_ADMIN}/{venue_picture['id']}", headers=AUTH)
+
+    assert response.status_code == 204
+    assert set(storage.files) == {
+        f"{hall_picture['storage_key']}/large.webp",
+        f"{hall_picture['storage_key']}/thumb.webp",
+    }
+
+
+async def test_venue_picture_limit_and_duplicate(
+    client: httpx2.AsyncClient,
+    hall: Hall,
+    session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first = (await upload_venue(client, jpeg())).json()
+    duplicate = await upload_venue(client, jpeg())
+    assert duplicate.status_code == 409
+    assert duplicate.json()["details"] == {"existing_picture_id": first["id"]}
+
+    monkeypatch.setattr(pictures, "MAX_PICTURES_PER_VENUE", 1)
+    response = await upload_venue(client, jpeg("blue"))
+
+    assert response.status_code == 409
+    assert response.json()["error_code"] == "TOO_MANY_PICTURES"
+    assert "venue" in response.json()["message"]
+
+
+async def test_venue_picture_patch_and_unknown_ids(client: httpx2.AsyncClient, hall: Hall) -> None:
+    picture = (await upload_venue(client, jpeg())).json()
+
+    response = await client.patch(
+        f"{VENUE_ADMIN}/{picture['id']}", json={"caption": CREDIT, "display_order": 3}, headers=AUTH
+    )
+
+    assert response.status_code == 200
+    assert (response.json()["caption"], response.json()["display_order"]) == (CREDIT, 3)
+    assert (await client.get(f"{VENUE_ADMIN}", headers=AUTH)).json()[0]["display_order"] == 3
+    assert (await client.patch(f"{VENUE_ADMIN}/999999", json={}, headers=AUTH)).status_code == 404
+    other = await client.delete("/api/v1/admin/venues/zqp-nope/pictures/1", headers=AUTH)
+    assert other.status_code == 404
+
+
+async def test_venue_picture_caption_rejects_contact_details(
+    client: httpx2.AsyncClient, hall: Hall
+) -> None:
+    response = await upload_venue(client, jpeg(), caption="Call 052-1234567")
+
+    assert response.status_code == 422
+
+
+async def test_venue_pictures_of_unpublished_venue_are_hidden(
+    client: httpx2.AsyncClient, hall: Hall, session: AsyncSession
+) -> None:
+    await upload_venue(client, jpeg())
+    venue = await session.get(Venue, hall.venue_id)
+    assert venue is not None
+    venue.is_published = False
+    await session.flush()
+
+    assert (await client.get(VENUE_PUBLIC)).status_code == 404
+    assert len((await client.get(VENUE_ADMIN, headers=AUTH)).json()) == 1
+
+
+async def test_deleting_a_venue_removes_its_venue_picture_files(
+    client: httpx2.AsyncClient, hall: Hall, storage: MemoryStorage
+) -> None:
+    await upload_venue(client, jpeg())
+    await upload(client, jpeg("green"))
+
+    response = await client.delete(
+        "/api/v1/admin/venues/zqp-venue", params={"confirm": "zqp-venue"}, headers=AUTH
+    )
+
+    assert response.status_code == 204
+    assert storage.files == {}
