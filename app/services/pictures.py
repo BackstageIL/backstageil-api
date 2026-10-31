@@ -1,7 +1,8 @@
 """
-Hall pictures: the gallery query (public and admin) and admin upload / edit / delete.
+Hall and venue pictures: the gallery queries (public and admin) and admin upload / edit / delete.
 
-Rows live in `hall_pictures`; files live in picture storage (Vercel Blob). On upload the files are
+Rows live in `hall_pictures` / `venue_pictures`; files live in picture storage (Vercel Blob), venue
+pictures under their own prefix so the two never share a file. On upload the files are
 written before the row, on delete the row is removed before the files: a failure in between
 can leave an unused file in the bucket, never a row pointing to a missing file.
 """
@@ -20,13 +21,19 @@ from app.core.exceptions import (
     PictureTooLargeError,
     TooManyPicturesError,
 )
-from app.db.models import Hall, HallPicture, Venue
+from app.db.models import Hall, HallPicture, Venue, VenuePicture
 from app.schemas.pictures import Picture, PicturePatch
-from app.services.picture_processing import file_key, file_keys, process_picture
+from app.services.picture_processing import (
+    ProcessedPicture,
+    file_key,
+    file_keys,
+    process_picture,
+)
 from app.services.picture_storage import PictureStorage, public_base_url
-from app.services.venues import find_hall
+from app.services.venues import find_hall, find_venue
 
 MAX_PICTURES_PER_HALL = 20
+MAX_PICTURES_PER_VENUE = 10  # the building, the entrance: a few are enough
 # Vercel Functions accept request bodies up to 4.5 MB (multipart overhead included)
 MAX_UPLOAD_BYTES = 4 * 1024 * 1024
 _MAX_DISPLAY_ORDER = 32767
@@ -43,7 +50,9 @@ def require_base_url(base_url: str | None) -> str:
     return base_url
 
 
-def to_model[P: Picture](picture: HallPicture, base_url: str | None, model: type[P]) -> P:
+def to_model[P: Picture](
+    picture: HallPicture | VenuePicture, base_url: str | None, model: type[P]
+) -> P:
     base = require_base_url(base_url)
     values: dict[str, Any] = {
         "id": picture.id,
@@ -77,6 +86,24 @@ async def list_pictures[P: Picture](
     return [to_model(picture, base_url, model) for picture in rows]
 
 
+async def _process_and_store(
+    session: AsyncSession,
+    storage: PictureStorage,
+    data: bytes,
+    model: type[HallPicture] | type[VenuePicture],
+    prefix: str,
+) -> tuple[ProcessedPicture, str]:
+    """Re-encodes the upload, refuses a file this table already has, writes the files."""
+    processed = await anyio.to_thread.run_sync(process_picture, data)
+    storage_key = f"{prefix}/{processed.content_hash}"
+    existing = await session.scalar(select(model.id).where(model.storage_key == storage_key))
+    if existing is not None:
+        raise DuplicatePictureError(existing)
+    for size, body in processed.files.items():
+        await storage.put(file_key(storage_key, size), body, "image/webp")
+    return processed, storage_key
+
+
 async def add_picture(
     session: AsyncSession,
     storage: PictureStorage,
@@ -94,16 +121,9 @@ async def add_picture(
     if (count or 0) >= MAX_PICTURES_PER_HALL:
         raise TooManyPicturesError(MAX_PICTURES_PER_HALL)
 
-    processed = await anyio.to_thread.run_sync(process_picture, data)
-    storage_key = f"pictures/{processed.content_hash}"
-    existing = await session.scalar(
-        select(HallPicture.id).where(HallPicture.storage_key == storage_key)
+    processed, storage_key = await _process_and_store(
+        session, storage, data, HallPicture, "pictures"
     )
-    if existing is not None:
-        raise DuplicatePictureError(existing)
-
-    for size, body in processed.files.items():
-        await storage.put(file_key(storage_key, size), body, "image/webp")
 
     last_order = await session.scalar(
         select(func.max(HallPicture.display_order)).where(HallPicture.hall_id == hall.id)
@@ -166,4 +186,99 @@ async def file_keys_of(
     )
     if hall_slug is not None:
         query = query.where(Hall.slug == hall_slug)
-    return [key for storage_key in await session.scalars(query) for key in file_keys(storage_key)]
+    keys = list(await session.scalars(query))
+    if hall_slug is None:  # the whole venue goes: its own pictures too
+        keys += await session.scalars(
+            select(VenuePicture.storage_key)
+            .join(Venue, Venue.id == VenuePicture.venue_id)
+            .where(Venue.slug == venue_slug)
+        )
+    return [key for storage_key in keys for key in file_keys(storage_key)]
+
+
+# --- Venue pictures (the building, the entrance; shown on the venue page only) -----------------
+
+
+async def list_venue_pictures[P: Picture](
+    session: AsyncSession,
+    venue_slug: str,
+    *,
+    base_url: str | None,
+    published_only: bool = True,
+    model: type[P] = Picture,  # type: ignore[assignment]
+) -> list[P]:
+    venue = await find_venue(session, venue_slug, published_only=published_only)
+    rows = await session.scalars(
+        select(VenuePicture)
+        .where(VenuePicture.venue_id == venue.id)
+        .order_by(VenuePicture.display_order, VenuePicture.id)
+    )
+    return [to_model(picture, base_url, model) for picture in rows]
+
+
+async def add_venue_picture(
+    session: AsyncSession,
+    storage: PictureStorage,
+    venue_slug: str,
+    data: bytes,
+    caption: str | None,
+) -> VenuePicture:
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise PictureTooLargeError(MAX_UPLOAD_BYTES)
+    venue = await find_venue(session, venue_slug, published_only=False)
+    count = await session.scalar(
+        select(func.count()).select_from(VenuePicture).where(VenuePicture.venue_id == venue.id)
+    )
+    if (count or 0) >= MAX_PICTURES_PER_VENUE:
+        raise TooManyPicturesError(MAX_PICTURES_PER_VENUE, owner="venue")
+
+    processed, storage_key = await _process_and_store(
+        session, storage, data, VenuePicture, "venue-pictures"
+    )
+    last_order = await session.scalar(
+        select(func.max(VenuePicture.display_order)).where(VenuePicture.venue_id == venue.id)
+    )
+    picture = VenuePicture(
+        venue_id=venue.id,
+        storage_key=storage_key,
+        caption=caption,
+        width=processed.width,
+        height=processed.height,
+        display_order=0 if last_order is None else min(last_order + 1, _MAX_DISPLAY_ORDER),
+    )
+    session.add(picture)
+    await session.flush()
+    await session.refresh(picture)  # server-side created_at
+    return picture
+
+
+async def find_venue_picture(
+    session: AsyncSession, venue_slug: str, picture_id: int
+) -> VenuePicture:
+    venue = await find_venue(session, venue_slug, published_only=False)
+    picture = await session.scalar(
+        select(VenuePicture).where(VenuePicture.id == picture_id, VenuePicture.venue_id == venue.id)
+    )
+    if picture is None:
+        raise PictureNotFoundError(picture_id)
+    return picture
+
+
+async def patch_venue_picture(
+    session: AsyncSession, venue_slug: str, picture_id: int, patch: PicturePatch
+) -> VenuePicture:
+    picture = await find_venue_picture(session, venue_slug, picture_id)
+    for field, value in patch.model_dump(exclude_unset=True).items():
+        setattr(picture, field, value)
+    await session.flush()
+    return picture
+
+
+async def delete_venue_picture(
+    session: AsyncSession, venue_slug: str, picture_id: int
+) -> list[str]:
+    """Deletes the row; returns its file keys to delete from storage after the commit."""
+    picture = await find_venue_picture(session, venue_slug, picture_id)
+    await session.delete(picture)
+    await session.flush()
+    return file_keys(picture.storage_key)

@@ -322,6 +322,74 @@ async def delete_picture(
     return Response(status_code=status.HTTP_204_NO_CONTENT, headers={"Cache-Control": "no-store"})
 
 
+# --- Venue pictures ----------------------------------------------------------------------------
+
+VENUE_PICTURES = "/venues/{venue_slug}/pictures"
+
+
+@router.get(VENUE_PICTURES, summary="Venue pictures (admin view)")
+async def list_venue_pictures(
+    session: Session, base_url: PicturesBaseUrl, venue_slug: VenueSlug
+) -> list[AdminPicture]:
+    return await pictures.list_venue_pictures(
+        session, venue_slug, base_url=base_url, published_only=False, model=AdminPicture
+    )
+
+
+@router.post(
+    VENUE_PICTURES,
+    status_code=status.HTTP_201_CREATED,
+    summary="Upload a venue picture (the building, the entrance)",
+    description="Same processing as hall pictures (JPEG, PNG or WebP, max 4 MB, stored as WebP "
+    f"without metadata). Up to {pictures.MAX_PICTURES_PER_VENUE} per venue; new pictures go last. "
+    "Put the photographer credit a free license requires in the caption.",
+)
+async def upload_venue_picture(
+    session: Session,
+    storage: Storage,
+    base_url: PicturesBaseUrl,
+    venue_slug: VenueSlug,
+    file: Annotated[UploadFile, File(description="JPEG, PNG or WebP, max 4 MB")],
+    caption: Annotated[SafeText | None, Form(max_length=300)] = None,
+) -> AdminPicture:
+    pictures.require_base_url(base_url)
+    data = await file.read(pictures.MAX_UPLOAD_BYTES + 1)  # one byte more detects a larger file
+    picture = await pictures.add_venue_picture(session, storage, venue_slug, data, caption)
+    await session.commit()
+    return pictures.to_model(picture, base_url, AdminPicture)
+
+
+@router.patch(
+    VENUE_PICTURES + "/{picture_id}",
+    summary="Edit a venue picture's caption or display order",
+    description="Only the fields sent are changed; caption null clears it.",
+)
+async def patch_venue_picture(
+    session: Session,
+    base_url: PicturesBaseUrl,
+    venue_slug: VenueSlug,
+    picture_id: PictureId,
+    patch: PicturePatch,
+) -> AdminPicture:
+    picture = await pictures.patch_venue_picture(session, venue_slug, picture_id, patch)
+    await session.commit()
+    return pictures.to_model(picture, base_url, AdminPicture)
+
+
+@router.delete(
+    VENUE_PICTURES + "/{picture_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a venue picture permanently (row and files)",
+)
+async def delete_venue_picture(
+    session: Session, storage: Storage, venue_slug: VenueSlug, picture_id: PictureId
+) -> Response:
+    picture_files = await pictures.delete_venue_picture(session, venue_slug, picture_id)
+    await session.commit()
+    await delete_files_quietly(storage, picture_files)
+    return Response(status_code=status.HTTP_204_NO_CONTENT, headers={"Cache-Control": "no-store"})
+
+
 # --- Recommendations ---------------------------------------------------------------------------
 
 RECOMMENDATIONS = "/venues/{venue_slug}/recommendations"

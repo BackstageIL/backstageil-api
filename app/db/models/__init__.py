@@ -6,6 +6,7 @@ from app.db.models.hall_picture import HallPicture
 from app.db.models.recommendation import Recommendation, RecommendationCategory
 from app.db.models.submission import Submission, SubmissionKind, SubmissionStatus
 from app.db.models.venue import Venue, VenueType
+from app.db.models.venue_picture import VenuePicture
 
 __all__ = [
     "City",
@@ -21,5 +22,6 @@ __all__ = [
     "SubmissionKind",
     "SubmissionStatus",
     "Venue",
+    "VenuePicture",
     "VenueType",
 ]
