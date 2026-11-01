@@ -10,7 +10,7 @@ from datetime import date, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import ColumnElement, and_, or_, select
+from sqlalchemy import ColumnElement, ColumnExpressionArgument, and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import RecommendationNotFoundError
@@ -43,6 +43,15 @@ def is_sponsored_now(recommendation: Recommendation, today: date) -> bool:
     return recommendation.is_sponsored and (until is None or until >= today)
 
 
+def _public_order(today: date) -> tuple[ColumnExpressionArgument[Any], ...]:
+    return (
+        _sponsored_now(today).desc(),
+        Recommendation.display_order,
+        Recommendation.name,
+        Recommendation.id,
+    )
+
+
 async def list_recommendations(
     session: AsyncSession,
     venue_slug: str,
@@ -58,13 +67,13 @@ async def list_recommendations(
         query = query.where(Recommendation.is_active)
     if category is not None:
         query = query.where(Recommendation.category == category)
-    query = query.order_by(
-        _sponsored_now(today).desc(),
-        Recommendation.display_order,
-        Recommendation.name,
-        Recommendation.id,
-    )
-    return list(await session.scalars(query))
+    return list(await session.scalars(query.order_by(*_public_order(today))))
+
+
+async def active_recommendations(session: AsyncSession, *, today: date) -> list[Recommendation]:
+    """Every venue's active rows, each venue's in the same order as its public list."""
+    query = select(Recommendation).where(Recommendation.is_active)
+    return list(await session.scalars(query.order_by(*_public_order(today))))
 
 
 def public_view(recommendation: Recommendation, today: date) -> PublicRecommendation:
