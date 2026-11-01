@@ -23,7 +23,8 @@ uv run alembic revision --autogenerate -m "..."  # new migration after model cha
 - `app/routes/` one `router` per domain; versioned routers go into `api_router` (`/api/v1`)
   - public read API: `/api/v1/venues`, `/venues/{slug}`, `/venues/{slug}/halls/{slug}`,
     `/venues/{slug}/halls/{slug}/pictures`, `/venues/{slug}/pictures` (the building, BSIL-69),
-    `/venues/{slug}/recommendations`, `/cities`
+    `/venues/{slug}/recommendations`, `/cities`, `/site/snapshot` (all of it in one response, so
+    a website build makes 1 call, BSIL-74)
     (published rows only; `public_cache` dependency sets Cache-Control on 200s)
   - public write: `POST /api/v1/submissions` (website contribution form, BSIL-58): never published,
     files in a private Blob store, reviewed via `scripts/review_submissions.py`

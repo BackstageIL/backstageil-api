@@ -5,6 +5,7 @@ The public API always uses published_only=True; the admin API passes published_o
 admin models (which add `is_published`). The same queries serve both.
 """
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
@@ -56,6 +57,27 @@ def _filtered_venues(filters: VenueFilters, published_only: bool) -> Select[tupl
     return query
 
 
+def _sorted_with_hall_count(
+    base: Select[tuple[Venue, City]], published_only: bool
+) -> Select[tuple[Venue, City, int]]:
+    hall_count = _hall_count(published_only).scalar_subquery()
+    return base.add_columns(hall_count).order_by(Venue.name, Venue.id)
+
+
+def venue_summary[S: VenueSummary](venue: Venue, city: City, count: int, *, model: type[S]) -> S:
+    return model(
+        slug=venue.slug,
+        name=venue.name,
+        name_he=venue.name_he,
+        venue_type=venue.venue_type,
+        street_address=venue.street_address,
+        street_address_he=venue.street_address_he,
+        city=CityRef.model_validate(city),
+        hall_count=count,
+        is_published=venue.is_published,  # ignored by the public model
+    )
+
+
 async def list_venues[S: VenueSummary](
     session: AsyncSession,
     filters: VenueFilters,
@@ -67,26 +89,18 @@ async def list_venues[S: VenueSummary](
 ) -> tuple[list[S], int]:
     base = _filtered_venues(filters, published_only)
     total = await session.scalar(select(func.count()).select_from(base.subquery()))
-
-    hall_count = _hall_count(published_only).scalar_subquery()
     rows = await session.execute(
-        base.add_columns(hall_count).order_by(Venue.name, Venue.id).limit(limit).offset(offset)
+        _sorted_with_hall_count(base, published_only).limit(limit).offset(offset)
     )
-    items = [
-        model(
-            slug=venue.slug,
-            name=venue.name,
-            name_he=venue.name_he,
-            venue_type=venue.venue_type,
-            street_address=venue.street_address,
-            street_address_he=venue.street_address_he,
-            city=CityRef.model_validate(city),
-            hall_count=count,
-            is_published=venue.is_published,  # ignored by the public model
-        )
-        for venue, city, count in rows
-    ]
+    items = [venue_summary(venue, city, count, model=model) for venue, city, count in rows]
     return items, total or 0
+
+
+async def published_venues(session: AsyncSession) -> list[tuple[Venue, City, int]]:
+    """Every published venue with its city and hall count, in the order of the public list."""
+    base = _filtered_venues(VenueFilters(), published_only=True)
+    rows = await session.execute(_sorted_with_hall_count(base, published_only=True))
+    return [(venue, city, count) for venue, city, count in rows]
 
 
 async def find_venue(session: AsyncSession, venue_slug: str, *, published_only: bool) -> Venue:
@@ -120,6 +134,28 @@ async def _city_ref(session: AsyncSession, city_id: int) -> CityRef:
     return CityRef.model_validate(city)
 
 
+def venue_detail[D: VenueDetail](
+    venue: Venue,
+    city: CityRef,
+    halls: Iterable[Hall],
+    *,
+    model: type[D],
+    hall_model: type[HallSummary] = HallSummary,
+) -> D:
+    return model(
+        slug=venue.slug,
+        name=venue.name,
+        name_he=venue.name_he,
+        venue_type=venue.venue_type,
+        street_address=venue.street_address,
+        street_address_he=venue.street_address_he,
+        website=venue.website,
+        city=city,
+        halls=[hall_model.model_validate(hall) for hall in halls],
+        is_published=venue.is_published,  # ignored by the public model
+    )
+
+
 async def get_venue[D: VenueDetail](
     session: AsyncSession,
     venue_slug: str,
@@ -133,18 +169,8 @@ async def get_venue[D: VenueDetail](
     if published_only:
         halls_query = halls_query.where(Hall.is_published)
     halls = await session.scalars(halls_query)
-    return model(
-        slug=venue.slug,
-        name=venue.name,
-        name_he=venue.name_he,
-        venue_type=venue.venue_type,
-        street_address=venue.street_address,
-        street_address_he=venue.street_address_he,
-        website=venue.website,
-        city=await _city_ref(session, venue.city_id),
-        halls=[hall_model.model_validate(hall) for hall in halls],
-        is_published=venue.is_published,  # ignored by the public model
-    )
+    city = await _city_ref(session, venue.city_id)
+    return venue_detail(venue, city, halls, model=model, hall_model=hall_model)
 
 
 async def get_hall[H: HallDocument](
@@ -159,20 +185,28 @@ async def get_hall[H: HallDocument](
     return await hall_document(session, hall, model=model)
 
 
-async def hall_document[H: HallDocument](session: AsyncSession, hall: Hall, *, model: type[H]) -> H:
-    venue = await session.get_one(Venue, hall.venue_id)
-    venue_ref = VenueRef(
+def venue_ref(venue: Venue, city: CityRef) -> VenueRef:
+    return VenueRef(
         slug=venue.slug,
         name=venue.name,
         name_he=venue.name_he,
         street_address=venue.street_address,
         street_address_he=venue.street_address_he,
-        city=await _city_ref(session, venue.city_id),
+        city=city,
     )
+
+
+def build_hall_document[H: HallDocument](hall: Hall, venue: VenueRef, *, model: type[H]) -> H:
     values: dict[str, Any] = {
         name: getattr(hall, name) for name in model.model_fields if name != "venue"
     }
-    return model.model_validate(values | {"venue": venue_ref})
+    return model.model_validate(values | {"venue": venue})
+
+
+async def hall_document[H: HallDocument](session: AsyncSession, hall: Hall, *, model: type[H]) -> H:
+    venue = await session.get_one(Venue, hall.venue_id)
+    ref = venue_ref(venue, await _city_ref(session, venue.city_id))
+    return build_hall_document(hall, ref, model=model)
 
 
 async def list_cities_with_venues(session: AsyncSession) -> list[CityWithCount]:
