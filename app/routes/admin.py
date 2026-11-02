@@ -64,6 +64,7 @@ router = APIRouter(
     prefix="/admin",
     tags=["Admin"],
     dependencies=[Depends(require_admin), Depends(no_store)],
+    include_in_schema=False,  # not in the public docs
 )
 
 Session = Annotated[AsyncSession, Depends(get_session)]

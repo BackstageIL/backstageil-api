@@ -33,6 +33,7 @@ from app.core.exceptions import (
 from app.core.logger import get_logger
 from app.db.models import Submission, SubmissionStatus
 from app.schemas.submissions import AdminSubmission, SubmissionFile, SubmissionForm
+from app.services.picture_processing import MAX_PIXELS
 from app.services.picture_storage import PictureStorage, delete_files_quietly
 
 logger = get_logger(__name__)
@@ -88,16 +89,17 @@ def safe_name(name: str, fallback: str) -> str:
 def _strip_image(data: bytes) -> tuple[bytes, str, str] | None:
     """Photos are re-encoded upright and without metadata; None when it isn't an image."""
     try:
-        with Image.open(BytesIO(data)) as image:
+        # The parsers of all other formats never see an uploaded file
+        with Image.open(BytesIO(data), formats=tuple(_IMAGE_FORMATS)) as image:
             image_format = image.format or ""
-            if image_format not in _IMAGE_FORMATS:
+            if image.width * image.height > MAX_PIXELS:
                 return None
             upright = ImageOps.exif_transpose(image)
             if image_format == "JPEG" and upright.mode not in ("RGB", "L"):
                 upright = upright.convert("RGB")
             out = BytesIO()
             upright.save(out, image_format, quality=90)
-    except UnidentifiedImageError, OSError, ValueError:
+    except UnidentifiedImageError, Image.DecompressionBombError, OSError, ValueError:
         return None
     content_type, extension = _IMAGE_FORMATS[image_format]
     return out.getvalue(), content_type, extension

@@ -3,7 +3,7 @@
 from io import BytesIO
 
 import pytest
-from PIL import Image
+from PIL import Image, TiffImagePlugin
 
 from app.core.exceptions import InvalidPictureError
 from app.services import picture_processing
@@ -111,3 +111,22 @@ def test_too_many_pixels_is_rejected_before_decoding(monkeypatch: pytest.MonkeyP
 
 def test_file_keys() -> None:
     assert file_keys("pictures/abc") == ["pictures/abc/large.webp", "pictures/abc/thumb.webp"]
+
+
+@pytest.mark.parametrize("image_format", ["TIFF", "BMP", "GIF"])
+def test_other_formats_are_refused(image_format: str) -> None:
+    with pytest.raises(InvalidPictureError):
+        process_picture(encode(Image.new("RGB", (10, 10)), image_format))
+
+
+def test_the_parser_of_another_format_never_sees_the_file(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail(_self: object) -> None:
+        raise AssertionError("the TIFF parser was run")
+
+    data = encode(Image.new("RGB", (10, 10)), "TIFF")
+    monkeypatch.setattr(TiffImagePlugin.TiffImageFile, "_open", fail)
+
+    with pytest.raises(InvalidPictureError):
+        process_picture(data)

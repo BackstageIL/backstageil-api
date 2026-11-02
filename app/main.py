@@ -9,7 +9,7 @@ from app.core.config import Settings, get_settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logger import configure_logging, get_logger
 from app.core.monitoring import init_error_tracking
-from app.core.security import FailedAttemptLimiter
+from app.core.security import FailedAttemptLimiter, NoContentSniffing
 from app.db.session import Database
 from app.routes import api_router
 from app.routes.health import router as health_router
@@ -69,6 +69,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
         allow_headers=["*"],
     )
+    app.add_middleware(NoContentSniffing)
     add_rebuild_after_admin_writes(app)
     register_exception_handlers(app)
 

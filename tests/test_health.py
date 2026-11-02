@@ -73,3 +73,14 @@ def test_openapi_docs_available(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert response.json()["info"]["title"] == "BackstageIL API"
+
+
+def test_public_docs_do_not_list_the_admin_routes(client: TestClient) -> None:
+    paths = client.get("/openapi.json").json()["paths"]
+
+    assert "/api/v1/venues" in paths
+    assert not [path for path in paths if "/admin" in path]
+
+
+def test_responses_forbid_content_sniffing(client: TestClient) -> None:
+    assert client.get("/health").headers["x-content-type-options"] == "nosniff"
