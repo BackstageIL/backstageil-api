@@ -1,10 +1,13 @@
 """Submission helpers (BSIL-58): anonymous connection codes, file names and file checks."""
 
 from datetime import date
+from io import BytesIO
 
 import pytest
+from PIL import Image, TiffImagePlugin
 
 from app.core.exceptions import InvalidSubmissionFileError
+from app.services import submissions
 from app.services.submissions import check_file, client_hash, safe_name
 
 
@@ -46,3 +49,62 @@ def test_old_office_files_are_accepted_by_content(name: str, content_type: str) 
 def test_office_extension_with_other_content_is_rejected() -> None:
     with pytest.raises(InvalidSubmissionFileError):
         check_file("sheet.xlsx", b"%!PS-Adobe", 0)
+
+
+def image_bytes(image_format: str, size: tuple[int, int] = (10, 10)) -> bytes:
+    buffer = BytesIO()
+    Image.new("RGB", size, "red").save(buffer, image_format)
+    return buffer.getvalue()
+
+
+@pytest.mark.parametrize(
+    ("image_format", "content_type", "name"),
+    [
+        ("JPEG", "image/jpeg", "photo.jpg"),
+        ("PNG", "image/png", "photo.png"),
+        ("WEBP", "image/webp", "photo.webp"),
+    ],
+)
+def test_allowed_images_are_kept(image_format: str, content_type: str, name: str) -> None:
+    checked = check_file("photo.bin", image_bytes(image_format), 0)
+
+    assert checked.content_type == content_type
+    assert checked.name == name
+
+
+@pytest.mark.parametrize("image_format", ["TIFF", "BMP", "GIF"])
+def test_other_image_formats_are_refused(image_format: str) -> None:
+    with pytest.raises(InvalidSubmissionFileError):
+        check_file("photo.jpg", image_bytes(image_format), 0)
+
+
+def test_the_parser_of_another_format_never_sees_the_file(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail(_self: object) -> None:
+        raise AssertionError("the TIFF parser was run")
+
+    data = image_bytes("TIFF")
+    monkeypatch.setattr(TiffImagePlugin.TiffImageFile, "_open", fail)
+
+    with pytest.raises(InvalidSubmissionFileError):
+        check_file("photo.tiff", data, 0)
+
+
+def test_corrupt_image_is_refused() -> None:
+    with pytest.raises(InvalidSubmissionFileError):
+        check_file("photo.jpg", image_bytes("JPEG")[:40], 0)
+
+
+def test_image_with_too_many_pixels_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(submissions, "MAX_PIXELS", 50)
+
+    with pytest.raises(InvalidSubmissionFileError):
+        check_file("photo.png", image_bytes("PNG"), 0)
+
+
+def test_decompression_bomb_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 10)  # Pillow refuses at twice this many
+
+    with pytest.raises(InvalidSubmissionFileError):
+        check_file("photo.png", image_bytes("PNG"), 0)

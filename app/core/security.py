@@ -16,6 +16,8 @@ from collections import defaultdict, deque
 from typing import Annotated
 
 from fastapi import Depends, Header, Request
+from starlette.datastructures import MutableHeaders
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.core.config import Settings
 from app.core.exceptions import AdminNotConfiguredError, TooManyAttemptsError, UnauthorizedError
@@ -110,3 +112,22 @@ def require_admin(
 
 
 AdminRequired = Annotated[None, Depends(require_admin)]
+
+
+class NoContentSniffing:
+    """Sets `X-Content-Type-Options: nosniff` on every response.
+
+    Plain ASGI on purpose: a second `@app.middleware("http")` would make unhandled errors reach
+    Sentry as a generic "unhandled errors in a TaskGroup".
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        async def send_with_header(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                MutableHeaders(scope=message)["X-Content-Type-Options"] = "nosniff"
+            await send(message)
+
+        await self.app(scope, receive, send_with_header)

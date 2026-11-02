@@ -14,7 +14,8 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 from app.core.exceptions import InvalidPictureError
 
-ALLOWED_FORMATS = frozenset({"JPEG", "PNG", "WEBP"})
+# Passed to Image.open, so the parsers of all other formats never see an uploaded file
+ALLOWED_FORMATS = ("JPEG", "PNG", "WEBP")
 MAX_PIXELS = 50_000_000  # 50 MP: larger than any phone photo, small enough to decode safely
 # Longest edge in pixels per served size (never upscaled)
 SIZES = {"large": 1600, "thumb": 400}
@@ -66,12 +67,7 @@ def process_picture(data: bytes) -> ProcessedPicture:
 
 def _open(data: bytes) -> Image.Image:
     try:
-        image = Image.open(BytesIO(data))  # reads the header only
-        if image.format not in ALLOWED_FORMATS:
-            raise InvalidPictureError(
-                f"Unsupported image format {image.format}; use JPEG, PNG or WebP",
-                details={"format": image.format},
-            )
+        image = Image.open(BytesIO(data), formats=ALLOWED_FORMATS)  # reads the header only
         if image.width * image.height > MAX_PIXELS:
             raise InvalidPictureError(
                 f"The image is too large ({image.width}x{image.height} pixels)",
