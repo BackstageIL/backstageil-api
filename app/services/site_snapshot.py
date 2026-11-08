@@ -17,7 +17,7 @@ from app.db.models import Hall, HallPicture, Venue, VenuePicture
 from app.schemas.pictures import Picture
 from app.schemas.site import SiteHall, SiteSnapshot, SiteVenue
 from app.schemas.venues import CityRef, HallDocument, VenueDetail, VenueSummary
-from app.services import recommendations
+from app.services import recommendations, vendors
 from app.services.pictures import to_model
 from app.services.venues import (
     build_hall_document,
@@ -90,4 +90,6 @@ async def site_snapshot(
                 ],
             )
         )
-    return SiteSnapshot(venues=venues)
+    return SiteSnapshot(
+        venues=venues, vendors=await vendors.published_vendors(session, base_url=base_url)
+    )

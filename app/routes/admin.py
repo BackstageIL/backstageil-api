@@ -49,8 +49,9 @@ from app.schemas.recommendations import (
     RecommendationPatch,
 )
 from app.schemas.submissions import AdminSubmission, SubmissionPatch
+from app.schemas.vendors import AdminVendor, VendorCreate, VendorPatch
 from app.schemas.venue_import import SLUG_PATTERN, SafeText, VenueImportItem
-from app.services import admin_venues, pictures, recommendations, submissions, venues
+from app.services import admin_venues, pictures, recommendations, submissions, vendors, venues
 from app.services.picture_storage import (
     PictureStorage,
     PrivateStorage,
@@ -72,6 +73,7 @@ VenueSlug = Annotated[str, Path(pattern=SLUG_PATTERN, max_length=150)]
 HallSlug = Annotated[str, Path(pattern=SLUG_PATTERN, max_length=80)]
 PictureId = Annotated[int, Path(ge=1)]
 RecommendationId = Annotated[int, Path(ge=1)]
+VendorSlug = Annotated[str, Path(pattern=SLUG_PATTERN, max_length=150)]
 Today = Annotated[date, Depends(recommendations.israel_today)]
 Storage = Annotated[PictureStorage, Depends(get_picture_storage)]
 OptionalStorage = Annotated[PictureStorage | None, Depends(get_optional_picture_storage)]
@@ -453,6 +455,141 @@ async def delete_recommendation(
 ) -> Response:
     await recommendations.delete_recommendation(session, venue_slug, recommendation_id)
     await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT, headers={"Cache-Control": "no-store"})
+
+
+# --- Vendors (BSIL-79) ---------------------------------------------------------------------------
+
+VENDORS = "/vendors"
+VENDOR = VENDORS + "/{vendor_slug}"
+VENDOR_PICTURES = VENDOR + "/pictures"
+
+
+@router.get(VENDORS, summary="Vendors (including unpublished)")
+async def list_vendors(session: Session, base_url: PicturesBaseUrl) -> list[AdminVendor]:
+    return await vendors.admin_vendors(session, base_url=base_url)
+
+
+@router.get(VENDOR, summary="One vendor (admin view)")
+async def get_vendor(
+    session: Session, base_url: PicturesBaseUrl, vendor_slug: VendorSlug
+) -> AdminVendor:
+    vendor = await vendors.find_vendor(session, vendor_slug, published_only=False)
+    return await vendors.admin_vendor(session, vendor, base_url)
+
+
+@router.post(
+    VENDORS,
+    status_code=status.HTTP_201_CREATED,
+    summary="Add a vendor (unpublished)",
+    description="`phone` and `email` are the vendor's business contact, given for publication; "
+    "names and descriptions may not hold phone numbers or emails. `districts` empty = the whole "
+    "country. Publish it after adding the logo.",
+)
+async def create_vendor(
+    session: Session, base_url: PicturesBaseUrl, data: VendorCreate
+) -> AdminVendor:
+    vendor = await vendors.create_vendor(session, data)
+    await session.commit()
+    return await vendors.admin_vendor(session, vendor, base_url)
+
+
+@router.patch(
+    VENDOR,
+    summary="Edit a vendor",
+    description="Only the fields sent are changed; null clears an optional field.",
+)
+async def patch_vendor(
+    session: Session, base_url: PicturesBaseUrl, vendor_slug: VendorSlug, patch: VendorPatch
+) -> AdminVendor:
+    vendor = await vendors.patch_vendor(session, vendor_slug, patch)
+    await session.commit()
+    return await vendors.admin_vendor(session, vendor, base_url)
+
+
+@router.post(VENDOR + "/publish", summary="Publish a vendor")
+async def publish_vendor(session: Session, vendor_slug: VendorSlug) -> PublishState:
+    vendor = await vendors.set_published(session, vendor_slug, True)
+    await session.commit()
+    return PublishState(slug=vendor.slug, is_published=vendor.is_published)
+
+
+@router.post(VENDOR + "/unpublish", summary="Unpublish a vendor")
+async def unpublish_vendor(session: Session, vendor_slug: VendorSlug) -> PublishState:
+    vendor = await vendors.set_published(session, vendor_slug, False)
+    await session.commit()
+    return PublishState(slug=vendor.slug, is_published=vendor.is_published)
+
+
+@router.delete(
+    VENDOR,
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a vendor permanently (with its pictures)",
+    description="Requires ?confirm=<vendor_slug>.",
+)
+async def delete_vendor(
+    session: Session, storage: OptionalStorage, vendor_slug: VendorSlug, confirm: Confirm = None
+) -> Response:
+    picture_files = await vendors.delete_vendor(session, vendor_slug, confirm)
+    await session.commit()
+    await delete_files_quietly(storage, picture_files)
+    return Response(status_code=status.HTTP_204_NO_CONTENT, headers={"Cache-Control": "no-store"})
+
+
+@router.post(
+    VENDOR_PICTURES,
+    status_code=status.HTTP_201_CREATED,
+    summary="Upload the vendor's logo or a photo",
+    description="Same processing as hall pictures (JPEG, PNG or WebP, max 4 MB, stored as WebP "
+    f"without metadata). One logo (`is_logo=true`) and up to {vendors.MAX_PHOTOS_PER_VENDOR} "
+    "photos per vendor.",
+)
+async def upload_vendor_picture(
+    session: Session,
+    storage: Storage,
+    base_url: PicturesBaseUrl,
+    vendor_slug: VendorSlug,
+    file: Annotated[UploadFile, File(description="JPEG, PNG or WebP, max 4 MB")],
+    is_logo: Annotated[bool, Form()] = False,
+    caption: Annotated[SafeText | None, Form(max_length=300)] = None,
+) -> AdminPicture:
+    pictures.require_base_url(base_url)
+    data = await file.read(pictures.MAX_UPLOAD_BYTES + 1)  # one byte more detects a larger file
+    picture = await vendors.add_picture(
+        session, storage, vendor_slug, data, is_logo=is_logo, caption=caption
+    )
+    await session.commit()
+    return pictures.to_model(picture, base_url, AdminPicture)
+
+
+@router.patch(
+    VENDOR_PICTURES + "/{picture_id}",
+    summary="Edit a vendor picture's caption or display order",
+    description="Only the fields sent are changed; caption null clears it.",
+)
+async def patch_vendor_picture(
+    session: Session,
+    base_url: PicturesBaseUrl,
+    vendor_slug: VendorSlug,
+    picture_id: PictureId,
+    patch: PicturePatch,
+) -> AdminPicture:
+    picture = await vendors.patch_picture(session, vendor_slug, picture_id, patch)
+    await session.commit()
+    return pictures.to_model(picture, base_url, AdminPicture)
+
+
+@router.delete(
+    VENDOR_PICTURES + "/{picture_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a vendor picture permanently (row and files)",
+)
+async def delete_vendor_picture(
+    session: Session, storage: Storage, vendor_slug: VendorSlug, picture_id: PictureId
+) -> Response:
+    picture_files = await vendors.delete_picture(session, vendor_slug, picture_id)
+    await session.commit()
+    await delete_files_quietly(storage, picture_files)
     return Response(status_code=status.HTTP_204_NO_CONTENT, headers={"Cache-Control": "no-store"})
 
 

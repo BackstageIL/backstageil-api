@@ -244,7 +244,7 @@ async def test_query_count_does_not_grow_with_the_venues(
         event.remove(connection, "before_cursor_execute", count)
 
     assert len(statements) == before
-    assert before <= 5
+    assert before <= 7  # 5 for the venues, 2 for the vendors (BSIL-79)
 
 
 async def test_snapshot_is_not_stored_by_the_cdn(

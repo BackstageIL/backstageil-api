@@ -4,6 +4,7 @@ from pydantic import BaseModel
 
 from app.schemas.pictures import Picture
 from app.schemas.recommendations import Recommendation
+from app.schemas.vendors import Vendor
 from app.schemas.venues import HallDocument, VenueDetail, VenueSummary
 
 
@@ -22,3 +23,4 @@ class SiteVenue(BaseModel):
 
 class SiteSnapshot(BaseModel):
     venues: list[SiteVenue]  # same order as the public venue list
+    vendors: list[Vendor]  # same as GET /vendors (BSIL-79)

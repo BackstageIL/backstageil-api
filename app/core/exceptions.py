@@ -26,6 +26,7 @@ class ErrorCode(StrEnum):
     UNKNOWN_CITY = "UNKNOWN_CITY"
     VENUE_NOT_FOUND = "VENUE_NOT_FOUND"
     HALL_NOT_FOUND = "HALL_NOT_FOUND"
+    VENDOR_NOT_FOUND = "VENDOR_NOT_FOUND"
     UNAUTHORIZED = "UNAUTHORIZED"
     TOO_MANY_ATTEMPTS = "TOO_MANY_ATTEMPTS"
     ADMIN_NOT_CONFIGURED = "ADMIN_NOT_CONFIGURED"
@@ -37,6 +38,7 @@ class ErrorCode(StrEnum):
     PICTURE_TOO_LARGE = "PICTURE_TOO_LARGE"
     TOO_MANY_PICTURES = "TOO_MANY_PICTURES"
     DUPLICATE_PICTURE = "DUPLICATE_PICTURE"
+    VENDOR_LOGO_EXISTS = "VENDOR_LOGO_EXISTS"
     PICTURES_NOT_CONFIGURED = "PICTURES_NOT_CONFIGURED"
     PICTURE_STORAGE_UNAVAILABLE = "PICTURE_STORAGE_UNAVAILABLE"
     SITE_REBUILD_NOT_CONFIGURED = "SITE_REBUILD_NOT_CONFIGURED"
@@ -143,6 +145,15 @@ class HallNotFoundError(DomainException):
             f"Hall '{hall_slug}' not found in venue '{venue_slug}'",
             details={"venue": venue_slug, "hall": hall_slug},
         )
+
+
+class VendorNotFoundError(DomainException):
+    status_code = status.HTTP_404_NOT_FOUND
+    error_code = ErrorCode.VENDOR_NOT_FOUND
+    error_type = ErrorType.NOT_FOUND
+
+    def __init__(self, vendor_slug: str) -> None:
+        super().__init__(f"Vendor '{vendor_slug}' not found", details={"vendor": vendor_slug})
 
 
 async def _domain_exception_handler(_request: Request, exc: Exception) -> JSONResponse:
@@ -300,6 +311,18 @@ class DuplicatePictureError(DomainException):
     def __init__(self, picture_id: int) -> None:
         super().__init__(
             "This picture was already uploaded", details={"existing_picture_id": picture_id}
+        )
+
+
+class VendorLogoExistsError(DomainException):
+    status_code = status.HTTP_409_CONFLICT
+    error_code = ErrorCode.VENDOR_LOGO_EXISTS
+    error_type = ErrorType.CONFLICT
+
+    def __init__(self, picture_id: int) -> None:
+        super().__init__(
+            "This vendor already has a logo; delete it first",
+            details={"existing_picture_id": picture_id},
         )
 
 
