@@ -1,5 +1,6 @@
 """
 Hall and venue pictures: the gallery queries (public and admin) and admin upload / edit / delete.
+Vendor pictures (`services/vendors.py`) reuse `to_model` and `process_and_store`.
 
 Rows live in `hall_pictures` / `venue_pictures`; files live in picture storage (Vercel Blob), venue
 pictures under their own prefix so the two never share a file. On upload the files are
@@ -21,7 +22,7 @@ from app.core.exceptions import (
     PictureTooLargeError,
     TooManyPicturesError,
 )
-from app.db.models import Hall, HallPicture, Venue, VenuePicture
+from app.db.models import Hall, HallPicture, VendorPicture, Venue, VenuePicture
 from app.schemas.pictures import Picture, PicturePatch
 from app.services.picture_processing import (
     ProcessedPicture,
@@ -51,7 +52,7 @@ def require_base_url(base_url: str | None) -> str:
 
 
 def to_model[P: Picture](
-    picture: HallPicture | VenuePicture, base_url: str | None, model: type[P]
+    picture: HallPicture | VenuePicture | VendorPicture, base_url: str | None, model: type[P]
 ) -> P:
     base = require_base_url(base_url)
     values: dict[str, Any] = {
@@ -86,11 +87,11 @@ async def list_pictures[P: Picture](
     return [to_model(picture, base_url, model) for picture in rows]
 
 
-async def _process_and_store(
+async def process_and_store(
     session: AsyncSession,
     storage: PictureStorage,
     data: bytes,
-    model: type[HallPicture] | type[VenuePicture],
+    model: type[HallPicture] | type[VenuePicture] | type[VendorPicture],
     prefix: str,
 ) -> tuple[ProcessedPicture, str]:
     """Re-encodes the upload, refuses a file this table already has, writes the files."""
@@ -121,7 +122,7 @@ async def add_picture(
     if (count or 0) >= MAX_PICTURES_PER_HALL:
         raise TooManyPicturesError(MAX_PICTURES_PER_HALL)
 
-    processed, storage_key = await _process_and_store(
+    processed, storage_key = await process_and_store(
         session, storage, data, HallPicture, "pictures"
     )
 
@@ -232,7 +233,7 @@ async def add_venue_picture(
     if (count or 0) >= MAX_PICTURES_PER_VENUE:
         raise TooManyPicturesError(MAX_PICTURES_PER_VENUE, owner="venue")
 
-    processed, storage_key = await _process_and_store(
+    processed, storage_key = await process_and_store(
         session, storage, data, VenuePicture, "venue-pictures"
     )
     last_order = await session.scalar(

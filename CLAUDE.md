@@ -23,15 +23,16 @@ uv run alembic revision --autogenerate -m "..."  # new migration after model cha
 - `app/routes/` one `router` per domain; versioned routers go into `api_router` (`/api/v1`)
   - public read API: `/api/v1/venues`, `/venues/{slug}`, `/venues/{slug}/halls/{slug}`,
     `/venues/{slug}/halls/{slug}/pictures`, `/venues/{slug}/pictures` (the building, BSIL-69),
-    `/venues/{slug}/recommendations`, `/cities`, `/site/snapshot` (all of it in one response, so
-    a website build makes 1 call, BSIL-74)
+    `/venues/{slug}/recommendations`, `/cities`, `/vendors`, `/vendors/{slug}` (vendors directory,
+    BSIL-79), `/site/snapshot` (all of it in one response, so a website build makes 1 call, BSIL-74)
     (published rows only; `public_cache` dependency sets Cache-Control on 200s)
   - public write: `POST /api/v1/submissions` (website contribution form, BSIL-58): never published,
     files in a private Blob store, reviewed via `scripts/review_submissions.py`
 - `app/schemas/` Pydantic request/response models
 - `app/services/` business logic; raises `DomainException` subclasses, never `HTTPException`
 - Errors always use the body `{"error_code", "error_type", "message", "details"}`
-- Data model: **cities → venues → halls** (+ `hall_pictures`, venue `recommendations`), models in
+- Data model: **cities → venues → halls** (+ `hall_pictures`, venue `recommendations`), and
+  `vendors` (+ `vendor_pictures`: one logo, photos) kept apart from venues; models in
   `app/db/models/`; data stored in English. Venue identity = city + name + street (names repeat).
 - Halls read like a venue technical document: sections of typed columns (access, stage, rigging,
   masking, power, sound, lighting, backstage, rules, seating), a short factual note per column in
