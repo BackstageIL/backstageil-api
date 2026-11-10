@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, HttpUrl, PositiveInt, model_v
 from app.db.models import VenueType
 from app.schemas.hall_extras import HallExtras, HallFieldNotes
 from app.schemas.hall_fields import HallTechnicalFields
-from app.schemas.venue_import import SafeText, check_hall_texts
+from app.schemas.venue_import import SLUG_PATTERN, SafeText, check_hall_texts
 from app.schemas.venues import HallDocument, HallSummary, VenueDetail, VenueSummary
 
 
@@ -41,6 +41,9 @@ class HallPatch(HallTechnicalFields):
 
     model_config = ConfigDict(extra="forbid")
 
+    # A new URL for the hall (BSIL-83); one already used in the same venue gives 409.
+    # The website keeps the old URL working with a redirect (backstageil-web vercel.json).
+    slug: str | None = Field(default=None, pattern=SLUG_PATTERN, max_length=80)
     name: SafeText | None = Field(default=None, min_length=2, max_length=150)
     name_he: SafeText | None = Field(default=None, min_length=2, max_length=150)
     field_notes: HallFieldNotes | None = None
@@ -51,6 +54,12 @@ class HallPatch(HallTechnicalFields):
     @model_validator(mode="after")
     def texts_have_no_contact_details(self) -> Self:
         check_hall_texts(self, self.field_notes, self.extras)
+        return self
+
+    @model_validator(mode="after")
+    def slug_is_not_cleared(self) -> Self:
+        if "slug" in self.model_fields_set and self.slug is None:
+            raise ValueError("slug can be changed but not cleared")
         return self
 
 
