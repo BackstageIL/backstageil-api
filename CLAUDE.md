@@ -45,6 +45,8 @@ uv run alembic revision --autogenerate -m "..."  # new migration after model cha
   keys only and URLs are built from the store's base URL.
 - Admin-only routes go under `app/routes/admin.py` (router-level `require_admin`); never put the
   admin key itself anywhere, only its hash in ADMIN_API_KEY_HASH.
+- A hall's URL (slug) can be changed with the admin hall edit (BSIL-83); add a permanent redirect
+  from the old URL in backstageil-web `vercel.json` so saved links and search results keep working.
 - Successful admin writes trigger a website rebuild (`services/site_rebuild.py` middleware,
   Vercel deploy hook `SITE_DEPLOY_HOOK_URL`, best effort; the hook URL is never logged).
 - Admin writes commit explicitly (`get_session` never commits); bulk import runs in a savepoint

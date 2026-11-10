@@ -254,6 +254,46 @@ async def test_patch_hall_partial_null_and_map_replacement(
     assert before is not None and after is not None and after >= before
 
 
+async def test_patch_hall_slug_moves_the_hall(client: httpx2.AsyncClient, city: City) -> None:
+    await import_(client, [item()])
+
+    response = await client.patch(
+        f"{ADMIN}/venues/zqa-venue/halls/main", json={"slug": "cinema-hall"}, headers=AUTH
+    )
+
+    assert response.status_code == 200
+    assert response.json()["slug"] == "cinema-hall"
+    assert await is_public(client, "/venues/zqa-venue/halls/cinema-hall")
+    assert not await is_public(client, "/venues/zqa-venue/halls/main")
+
+
+async def test_patch_hall_slug_taken_in_the_venue_is_409(
+    client: httpx2.AsyncClient, city: City
+) -> None:
+    await import_(client, [item()])
+    second = await import_(client, [item() | {"hall": {"slug": "small", "name": "Small hall"}}])
+    assert second.status_code == 200, second.text
+
+    taken = await client.patch(
+        f"{ADMIN}/venues/zqa-venue/halls/small", json={"slug": "main"}, headers=AUTH
+    )
+
+    assert taken.status_code == 409
+
+
+async def test_patch_hall_slug_used_by_another_venue_is_fine(
+    client: httpx2.AsyncClient, city: City
+) -> None:
+    await import_(client, [item(), item(slug="other-venue")])
+    await client.patch(f"{ADMIN}/venues/other-venue/halls/main", json={"slug": "big"}, headers=AUTH)
+
+    response = await client.patch(
+        f"{ADMIN}/venues/zqa-venue/halls/main", json={"slug": "big"}, headers=AUTH
+    )
+
+    assert response.status_code == 200
+
+
 @pytest.mark.parametrize(
     "patch",
     [
@@ -262,6 +302,9 @@ async def test_patch_hall_partial_null_and_map_replacement(
         {"notes": "ask 052-1234567"},
         {"capacity_seated": -5},
         {"not_a_field": 1},
+        {"slug": None},
+        {"slug": "Not A Slug"},
+        {"slug": "x" * 81},
     ],
 )
 async def test_invalid_hall_patch_is_422(
